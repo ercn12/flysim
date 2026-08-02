@@ -130,7 +130,7 @@
   <b>Boşluk</b> spoyler &nbsp; <b>K</b> yer spoyleri<br>
   <b>Z</b> ters itki (basılı) &nbsp; <b>L</b> farlar<br>
   <b>1</b> otopilot &nbsp; <b>3</b> oto gaz &nbsp; <b>4</b> ILS<br>
-  <b>M</b> rüzgâr koşulu<br>
+  <b>M</b> rüzgâr &nbsp; <b>6/7</b> motor arızası / onar<br>
   <b>8 / 2</b> ses aç / kıs &nbsp; <b>5</b> sessiz<br>
   <b>P</b> grafik kalitesi<br>
   <b>R</b> piste dön &nbsp; <b>H</b> bu paneli gizle
@@ -758,7 +758,8 @@ const ailR   = hinged(wingR,  30.0, 15.41,  8.0, 1.4, M_WING, 0.26);
 for(const f of [flapL,flapR,flapL2,flapR2]){ f.userData.z0 = f.position.z; FLAPS.push(f); }
 
 /* ---------------- 4 motor ---------------- */
-const fans = [], revCowls = [];
+const fans = [], revCowls = [], NACELLES = [];
+const ENG_X = [-26.2, -15.6, 15.6, 26.2];
 function nacelle(x, y, z, R){
   const g = new THREE.Group();
   const shell = new THREE.Mesh(new THREE.CylinderGeometry(R*0.94, R, 7.0, 26, 1, true), M_WING);
@@ -790,10 +791,12 @@ function nacelle(x, y, z, R){
   const pyl = new THREE.Mesh(new THREE.BoxGeometry(0.95, 3.0, 6.4), M_WING);
   pyl.position.set(0, R*0.80 + 1.1, 2.6); g.add(pyl);
   g.position.set(x, y, z);
-  ext.add(g); return g;
+  ext.add(g); NACELLES.push(g); return g;
 }
-nacelle(-15.6, -4.10,  4.00, 1.75);   nacelle(15.6, -4.10,  4.00, 1.75);
-nacelle(-26.2, -3.05, 10.30, 1.60);   nacelle(26.2, -3.05, 10.30, 1.60);
+nacelle(-26.2, -3.05, 10.30, 1.60);   // 1 (dış sol)
+nacelle(-15.6, -4.10,  4.00, 1.75);   // 2 (iç sol)
+nacelle( 15.6, -4.10,  4.00, 1.75);   // 3 (iç sağ)
+nacelle( 26.2, -3.05, 10.30, 1.60);   // 4 (dış sağ)
 
 /* kanat-gövde karenajı */
 (function(){
@@ -879,10 +882,11 @@ const SMOKE = [];
     SMOKE.push({sp, life:0, vy:0});
   }
 })();
-function puff(x,y,z,sz){
+function puff(x,y,z,sz,col,rise){
   for(const s of SMOKE){
     if(s.life>0) continue;
-    s.life = 1; s.vy = 1.4+Math.random()*1.8;
+    s.life = 1; s.vy = (rise===undefined?1.4+Math.random()*1.8:rise);
+    s.sp.material.color.set(col===undefined?0xd7d2cc:col);
     s.sp.position.set(x+(Math.random()-0.5)*2.5, y, z+(Math.random()-0.5)*3);
     s.sp.scale.set(sz,sz,1); s.sp.visible = true;
     s.sp.material.opacity = 0.55;
@@ -1286,8 +1290,7 @@ for(const s of [-1,1]){
 const G = {};
 const GAUGES = [
   ['asi',-0.680,0.860,0.090], ['ai',-0.480,0.860,0.090], ['alt',-0.280,0.860,0.090],
-  ['tc', -0.680,0.660,0.090], ['hi',-0.480,0.660,0.090], ['vsi',-0.280,0.660,0.090],
-  ['n1',  0.010,0.855,0.082], ['eng', 0.010,0.660,0.082]
+  ['tc', -0.680,0.660,0.090], ['hi',-0.480,0.660,0.090], ['vsi',-0.280,0.660,0.090]
 ];
 for(const [k,gx,gy,r] of GAUGES){
   const o = inst(); G[k]=o;
@@ -1296,6 +1299,75 @@ for(const [k,gx,gy,r] of GAUGES){
   const bez = new THREE.Mesh(new THREE.RingGeometry(r,r+0.014,44),
     new THREE.MeshLambertMaterial({color:0x08090b}));
   bez.position.set(gx,gy,PZ+0.038); cockpit.add(bez);
+}
+
+/* --- EICAS motor ekranı --- */
+function inst2(w,h){
+  const c = cv(w,h), x = c.getContext('2d');
+  const t = new THREE.CanvasTexture(c);
+  t.minFilter = t.magFilter = THREE.LinearFilter; t.generateMipmaps = false;
+  return {c, x, t, w, h};
+}
+const eicas = inst2(512, 384);
+(function(){
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.34,0.255),
+    new THREE.MeshBasicMaterial({map:eicas.t}));
+  m.position.set(0.075, 0.760, PZ+0.036); cockpit.add(m);
+  const fr = new THREE.Mesh(new THREE.PlaneGeometry(0.365,0.28),
+    new THREE.MeshLambertMaterial({color:0x08090b}));
+  fr.position.set(0.075, 0.760, PZ+0.034); cockpit.add(fr);
+})();
+function drawEICAS(x, engs, fuel, oil, egt, rev){
+  const W=512, H=384;
+  x.fillStyle='#05070a'; x.fillRect(0,0,W,H);
+  x.strokeStyle='#1c242b'; x.lineWidth=2; x.strokeRect(3,3,W-6,H-6);
+  x.fillStyle='#7d878e'; x.font='bold 17px ui-monospace, monospace';
+  x.textAlign='left'; x.textBaseline='middle'; x.fillText('N1  %', 16, 22);
+  x.textAlign='right'; x.fillText('ENGINE', W-16, 22);
+  for(let i=0;i<4;i++){
+    const cx = 74 + i*118, top = 44, hgt = 176;
+    const E = engs[i], v = clamp(E.n1/110, 0, 1);
+    x.fillStyle='#0d1216'; x.fillRect(cx-30, top, 60, hgt);
+    x.strokeStyle='#26303a'; x.lineWidth=2; x.strokeRect(cx-30, top, 60, hgt);
+    // kırmızı bölge
+    x.fillStyle='rgba(224,57,43,0.30)'; x.fillRect(cx-30, top, 60, hgt*(1-102/110));
+    const col = E.fail ? '#e0392b' : (E.n1>102 ? '#e0392b' : '#6fe3a8');
+    x.fillStyle = col;
+    x.fillRect(cx-26, top+hgt*(1-v)+2, 52, hgt*v-4);
+    // sayısal
+    x.fillStyle='#05070a'; x.fillRect(cx-34, top+hgt+8, 68, 30);
+    x.strokeStyle='#39424a'; x.lineWidth=2; x.strokeRect(cx-34, top+hgt+8, 68, 30);
+    x.fillStyle = col; x.font='bold 21px ui-monospace, monospace';
+    x.textAlign='center'; x.textBaseline='middle';
+    x.fillText(E.fail ? 'FAIL' : E.n1.toFixed(1), cx, top+hgt+23);
+    x.fillStyle='#7d878e'; x.font='15px ui-monospace, monospace';
+    x.fillText(String(i+1), cx, top+hgt+52);
+    if(E.fail){
+      x.strokeStyle='#e0392b'; x.lineWidth=4;
+      x.beginPath(); x.moveTo(cx-26,top+8); x.lineTo(cx+26,top+hgt-8);
+      x.moveTo(cx+26,top+8); x.lineTo(cx-26,top+hgt-8); x.stroke();
+    }
+  }
+  function bar(y,label,val,col){
+    const w = 300, x0 = 150;
+    x.fillStyle='#7d878e'; x.font='14px ui-monospace, monospace';
+    x.textAlign='right'; x.textBaseline='middle'; x.fillText(label, x0-12, y+9);
+    x.fillStyle='#0d1216'; x.fillRect(x0,y,w,18);
+    x.fillStyle=col; x.fillRect(x0+2,y+2,(w-4)*clamp(val,0,1),14);
+    x.strokeStyle='#39424a'; x.lineWidth=2; x.strokeRect(x0,y,w,18);
+  }
+  bar(292,'FUEL', fuel, fuel<0.18?'#e0392b':'#6fe3a8');
+  bar(318,'OIL',  oil,  oil>0.86?'#e0392b':'#ffb020');
+  bar(344,'EGT',  egt,  '#e07a4a');
+  if(rev>0.05){
+    x.fillStyle='#ffb020'; x.font='bold 18px ui-monospace, monospace';
+    x.textAlign='left'; x.fillText('REV', 16, 300);
+  }
+  const anyFail = engs.some(e=>e.fail);
+  if(anyFail && Math.floor(performance.now()/450)%2===0){
+    x.fillStyle='#e0392b'; x.font='bold 22px ui-monospace, monospace';
+    x.textAlign='center'; x.fillText('ENG FAIL', W/2, 22);
+  }
 }
 
 /* --- CDU / radyo --- */
@@ -1444,6 +1516,9 @@ const F = {
   pos:new THREE.Vector3(), vel:new THREE.Vector3(), quat:new THREE.Quaternion(),
   om:new THREE.Vector3(),
   thr:0, thrTgt:0, n1:0, eng:false, starting:0,
+  engs:[{n1:0,fail:false,fire:0},{n1:0,fail:false,fire:0},
+        {n1:0,fail:false,fire:0},{n1:0,fail:false,fire:0}],
+  asym:0,
   flap:0, gearDown:true, gearPos:1, brake:false,
   spoilerCmd:0, spoiler:0, spArmed:false, revCmd:false, rev:0,
   comp:GEAR_STATIC, compV:0, lts:{land:false, strobe:false},
@@ -1461,6 +1536,8 @@ function resetPlane(){
   F.vel.set(0,0,0); F.om.set(0,0,0);
   F.quat.identity();
   F.thr=0; F.thrTgt=0; F.n1 = F.eng?22:0;
+  for(const E of F.engs){ E.n1 = F.eng?22:0; E.fail=false; E.fire=0; }
+  F.asym=0;
   F.flap=0; F.gearDown=true; F.gearPos=1; F.brake=false;
   F.spoilerCmd=0; F.spoiler=0; F.spArmed=false; F.revCmd=false; F.rev=0;
   F.comp=GEAR_STATIC; F.compV=0;
@@ -1479,21 +1556,12 @@ function physics(dt){
   _up.set(0,1,0).applyQuaternion(q);
   _rt.set(1,0,0).applyQuaternion(q);
 
-  /* --- motorlar (N1 %) --- */
+  /* --- motorlar: 4 adet, ayrı ayrı --- */
   if(F.starting>0){
     F.starting -= dt;
-    F.n1 = damp(F.n1, 16, 1.6, dt);
     if(F.starting<=0){ F.eng = true; toast('MOTORLAR ÇALIŞIYOR'); }
-  } else if(F.eng){
-    if(F.fuel<=0){ F.eng=false; toast('YAKIT BİTTİ'); }
-    F.n1 = damp(F.n1, 21 + F.thr*79, 0.62, dt);      // dev turbofanlar daha da yavaş
-  } else {
-    F.n1 = damp(F.n1, 0, 0.45, dt);
   }
-  const power = F.eng ? clamp((F.n1-22)/78, 0, 1.05) : 0;
-  if(F.eng) F.fuel = clamp(F.fuel - (0.05+power*0.95)*0.000062*dt, 0, 1);
-  F.oil = damp(F.oil, F.eng ? 0.40+power*0.36 : 0.14, 0.10, dt);
-  F.egt = damp(F.egt, F.eng ? 0.22+power*0.62 : 0.04, 0.30, dt);
+  if(F.eng && F.fuel<=0){ F.eng=false; toast('YAKIT BİTTİ'); }
 
   /* --- hava --- */
   const alt = F.pos.y;
@@ -1509,6 +1577,8 @@ function physics(dt){
   F.slip = V>2 ? Math.atan2(_vl.x, vf) : 0;
 
   const flapDeg = FLAP_SET[F.flap];
+  let failedDrag = 0;
+  for(const E of F.engs) if(E.fail) failedDrag += 0.0048;
   // yer etkisi: kanat açıklığının yarısından alçakta taşıma artar, indüklenen direnç düşer
   const aglm = Math.max(F.pos.y - terrainH(F.pos.x,F.pos.z), 0);
   const ge = clamp(1 - aglm/40, 0, 1);
@@ -1516,7 +1586,7 @@ function physics(dt){
   const over = smoothstep(STALL_A, STALL_A+DEG(8), Math.abs(F.aoa));
   F.stall = over;
   cl *= (1 - 0.78*over) * (1 - 0.38*F.spoiler);
-  const cd = CD0 + KIND*(1-0.45*ge)*cl*cl + over*0.10 + flapDeg*0.0016 + F.gearPos*0.016 + F.spoiler*0.075
+  const cd = CD0 + KIND*(1-0.45*ge)*cl*cl + failedDrag + over*0.10 + flapDeg*0.0016 + F.gearPos*0.016 + F.spoiler*0.075
              + 0.085*smoothstep(168, 215, ve);        // yüksek hız direnç artışı
   const qd = 0.5*rho*V*V;
 
@@ -1528,8 +1598,28 @@ function physics(dt){
     _f.addScaledVector(vd, -qd*SREF*cd);
     _f.addScaledVector(_rt, -qd*SREF*0.70*F.slip);
   }
-  const tAvail = MAXT * power * Math.pow(rho/1.225, 0.85) * (1 - 0.22*clamp(V/250,0,1.1));
-  _f.addScaledVector(_fwd, Math.max(tAvail,0) * (1 - 1.42*F.rev));   // ters itki
+  // her motor kendi itkisini ve yalpa momentini üretir
+  let tSum = 0, mSum = 0, n1Sum = 0, failed = 0, power = 0;
+  for(let i=0;i<4;i++){
+    const E = F.engs[i];
+    let tgt;
+    if(E.fail)            tgt = clamp(V*0.10, 0, 17);        // yelkovan (windmilling)
+    else if(F.starting>0) tgt = 16;
+    else if(F.eng)        tgt = 21 + F.thr*79;
+    else                  tgt = 0;
+    E.n1 = damp(E.n1, tgt, E.fail ? 1.4 : (F.starting>0?1.1:0.62), dt);
+    if(E.fire>0) E.fire = Math.max(E.fire - dt*0.06, 0);
+    const pw = E.fail ? 0 : clamp((E.n1-21)/79, 0, 1.05);
+    const th = (MAXT/4)*pw*Math.pow(rho/1.225,0.85)*(1-0.22*clamp(V/250,0,1.1))*(1-1.42*F.rev);
+    tSum += th; mSum += th*ENG_X[i]; n1Sum += E.n1; power += pw*0.25;
+    if(E.fail) failed++;
+  }
+  F.n1 = n1Sum/4;
+  F.asym = mSum;
+  if(F.eng) F.fuel = clamp(F.fuel - (0.05+power*0.95)*0.000062*dt, 0, 1);
+  F.oil = damp(F.oil, F.eng ? 0.40+power*0.36 : 0.14, 0.10, dt);
+  F.egt = damp(F.egt, F.eng ? 0.22+power*0.62 : 0.04, 0.30, dt);
+  _f.addScaledVector(_fwd, Math.max(tSum,0));
   _f.y -= MASS*GRAV;
 
   F.gLoad = damp(F.gLoad, V>6 ? clamp(qd*SREF*cl/(MASS*GRAV),-3,6) : 1, 8, dt);
@@ -1539,8 +1629,9 @@ function physics(dt){
   if(Math.abs(F.pitchIn) < 0.06 && !F.ground)
     F.trimA = clamp(damp(F.trimA, F.aoa, 0.32, dt), -0.10, 0.17);
   const tp =  F.pitchIn*0.30*auth - (F.aoa-F.trimA)*1.15*auth - F.om.x*0.40;
-  const ty =  F.yawIn*0.16*auth   - F.slip*0.95*auth;
-  const tr =  F.rollIn*0.50*auth  + F.slip*0.35*auth;
+  const asymY = F.asym*1.75e-8;                      // ölü motor tarafına burun kaçar
+  const ty =  F.yawIn*0.16*auth   - F.slip*0.95*auth + asymY;
+  const tr =  F.rollIn*0.50*auth  + F.slip*0.35*auth + F.asym*0.55e-8;
   if(!F.ground){
     F.om.x = damp(F.om.x, tp*(1-over*0.5), 1.1, dt);
     F.om.y = damp(F.om.y, ty, 0.9, dt);
@@ -1584,7 +1675,7 @@ function physics(dt){
     const gp = clamp(F.pitchIn*DEG(12)*rotAuth, DEG(-0.8), DEG(12));
     const pit = damp(e.x, gp, 1.6, dt);
     _e.set(pit,
-           e.y + F.yawIn*clamp(hs/55,0,1)*0.12*dt*(hs>0.5?1:0),
+           e.y + (F.yawIn*clamp(hs/55,0,1)*0.12 + F.asym*1.1e-8*clamp(hs/40,0,1))*dt*(hs>0.5?1:0),
            damp(e.z, 0, 3.5, dt), 'YXZ');
     q.setFromEuler(_e);
     // gövde, ana tekerlekler piste değecek şekilde oturtulur
@@ -1865,6 +1956,17 @@ addEventListener('keydown', e=>{
       hint.style.display = help.classList.contains('hidden')?'block':'none'; break;
     case 'KeyX': lookT.set(0,0); break;
     case 'KeyP': setQuality((perf.level+1)%3, true); break;
+    case 'Digit6': {
+      const live = [0,1,2,3].filter(i=>!F.engs[i].fail);
+      if(!live.length){ toast('TÜM MOTORLAR ARIZALI'); break; }
+      const i = live[Math.floor(Math.random()*live.length)];
+      F.engs[i].fail = true; F.engs[i].fire = 1;
+      sfx.crash(); say('engine failure', true);
+      toast('MOTOR '+(i+1)+' ARIZASI'); break;
+    }
+    case 'Digit7':
+      for(const E of F.engs){ E.fail=false; E.fire=0; }
+      sfx.click(); toast('MOTORLAR ONARILDI'); break;
     case 'KeyM':
       WIND.set = (WIND.set+1)%WIND_SETS.length; sfx.click();
       toast('RÜZGÂR: '+WIND_SETS[WIND.set].n+' · '+WIND_SETS[WIND.set].dir+'° / '+WIND_SETS[WIND.set].kt+' KT'); break;
@@ -2030,9 +2132,10 @@ function updateHUD(dt, kt){
         : 'ARANIYOR'),
         AP.appr ? (_ils&&_ils.live?'on':'hot') : '');
   const st = F.stall>0.25 && !F.ground;
-  const wt = F.fuel<=0 ? 'YAKIT' : 'STALL';
+  const engFail = F.engs.some(e=>e.fail);
+  const wt = st ? 'STALL' : (engFail ? 'MOTOR ARIZASI' : 'YAKIT');
   if(wt !== warnEl.textContent) warnEl.textContent = wt;
-  const wshow = (st || F.fuel<=0.03) && Math.floor(performance.now()/280)%2===0;
+  const wshow = (st || engFail || F.fuel<=0.03) && Math.floor(performance.now()/280)%2===0;
   if(wshow !== lastWarn){ warnEl.classList.toggle('show', wshow); lastWarn = wshow; }
   if(toastT>0){ toastT-=dt; if(toastT<=0) toastEl.classList.remove('show'); }
   // ikaz lambaları
@@ -2048,7 +2151,7 @@ function updateHUD(dt, kt){
 /* =========================================================================
    GÖRSEL GÜNCELLEME
    ========================================================================= */
-let gaugeAcc = 0, gaugeStep = 0;
+let gaugeAcc = 0, gaugeStep = 0, fireT = 0;
 function updateVisuals(dt, kt, ftAlt, fpm, hdg, e, turnRate){
   plane.position.copy(F.pos);
   plane.quaternion.copy(F.quat);
@@ -2089,9 +2192,22 @@ function updateVisuals(dt, kt, ftAlt, fpm, hdg, e, turnRate){
   if(F.ground) for(const g of GEARS)
     for(const w of g.userData.wheels) w.rotation.x += spin;
 
-  // fanlar
-  const fanSpin = (0.3 + F.n1/100*3.4)*dt;
-  for(const f of fans) f.rotation.z += fanSpin;
+  // fanlar (her motor kendi devriyle)
+  for(let i=0;i<fans.length;i++)
+    fans[i].rotation.z += (0.3 + F.engs[i].n1/100*3.4)*dt;
+  // arızalı motordan duman
+  fireT -= dt;
+  if(fireT <= 0){
+    fireT = 0.09;
+    for(let i=0;i<4;i++){
+      const E = F.engs[i];
+      if(E.fire <= 0) continue;
+      _tmp.set(ENG_X[i], i===0||i===3 ? -3.05 : -4.10, i===0||i===3 ? 12.0 : 5.6)
+          .applyQuaternion(F.quat).add(F.pos);
+      puff(_tmp.x, _tmp.y, _tmp.z, 3.5+Math.random()*3,
+           E.fire>0.55 ? 0x241f1c : 0x4a443f, 0.6);
+    }
+  }
 
   // amortisörler
   const axY = (F.comp - GEAR_STATIC)*GEAR_TRAVEL;
@@ -2132,17 +2248,16 @@ function updateVisuals(dt, kt, ftAlt, fpm, hdg, e, turnRate){
     gaugeAcc -= 1/30;
     drawAI(G.ai.x, RAD(e.x), -RAD(e.z), ilsData()); G.ai.t.needsUpdate = true;
   }
-  const n = Math.max(F.n1,0);
   for(let q=0; q<perf.gaugesPerFrame; q++){
-    gaugeStep = (gaugeStep+1) % 7;
+    gaugeStep = (gaugeStep+1) % 6;
     switch(gaugeStep){
       case 0: drawASI(G.asi.x, kt); G.asi.t.needsUpdate=true; break;
       case 1: drawALT(G.alt.x, ftAlt); G.alt.t.needsUpdate=true; break;
       case 2: drawVSI(G.vsi.x, fpm); G.vsi.t.needsUpdate=true; break;
       case 3: drawHI(G.hi.x, hdg); G.hi.t.needsUpdate=true; break;
       case 4: drawTC(G.tc.x, turnRate, clamp(-F.slip*3.2,-1,1)); G.tc.t.needsUpdate=true; break;
-      case 5: drawN1(G.n1.x, n, n*0.995); G.n1.t.needsUpdate=true; break;
-      case 6: drawENG(G.eng.x, F.fuel, F.oil, F.egt); G.eng.t.needsUpdate=true; break;
+      case 5: drawEICAS(eicas.x, F.engs, F.fuel, F.oil, F.egt, F.rev);
+              eicas.t.needsUpdate=true; break;
     }
   }
 }
