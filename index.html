@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>byecoandhaşo · Uçuş Simülatörü</title>
+<title>ECOOMEDYA · Uçuş Simülatörü</title>
 <style>
   :root{
     --ink:#05070a;
@@ -25,6 +25,7 @@
   .hud{position:fixed; pointer-events:none; z-index:10}
 
   #status{left:16px; top:14px; display:flex; gap:10px; align-items:stretch}
+  #apbar{left:16px; top:72px; display:flex; gap:10px; align-items:stretch}
   .chip{
     background:rgba(8,12,16,.72); border:1px solid var(--line); border-left:2px solid var(--line);
     padding:6px 9px; min-width:62px; backdrop-filter:blur(6px);
@@ -100,6 +101,13 @@
   <div class="chip" id="cFps"><div class="k">FPS</div><div class="v">60</div></div>
 </div>
 
+<div class="hud" id="apbar">
+  <div class="chip" id="cAp"><div class="k">Otopilot</div><div class="v">KAPALI</div></div>
+  <div class="chip" id="cAt"><div class="k">Oto Gaz</div><div class="v">KAPALI</div></div>
+  <div class="chip" id="cIls"><div class="k">ILS 36</div><div class="v">—</div></div>
+  <div class="chip" id="cSpl"><div class="k">Spoyler</div><div class="v">0%</div></div>
+</div>
+
 <div class="hud" id="warn">STALL</div>
 <div class="hud" id="toast"></div>
 
@@ -110,13 +118,16 @@
 
 <div class="hud" id="help">
   <h4>KUMANDALAR</h4>
-  <b>W / S</b> burun aşağı / yukarı<br>
-  <b>A / D</b> yatış (aileron)<br>
+  <b>W / S</b> burun aşağı / yukarı (AP açıkken irtifa)<br>
+  <b>A / D</b> yatış (AP açıkken istikamet)<br>
   <b>Q / E</b> istikamet (rudder)<br>
   <b>Shift / Ctrl</b> itki aç / kıs<br>
   <b>G</b> iniş takımı &nbsp; <b>F</b> flap<br>
   <b>B</b> fren &nbsp; <b>ENTER</b> motorlar<br>
   <b>C</b> kamera &nbsp; <b>Fare</b> etrafa bak<br>
+  <b>Boşluk</b> spoyler &nbsp; <b>K</b> yer spoyleri<br>
+  <b>Z</b> ters itki (basılı) &nbsp; <b>L</b> farlar<br>
+  <b>1</b> otopilot &nbsp; <b>3</b> oto gaz &nbsp; <b>4</b> ILS<br>
   <b>8 / 2</b> ses aç / kıs &nbsp; <b>5</b> sessiz<br>
   <b>P</b> grafik kalitesi<br>
   <b>R</b> piste dön &nbsp; <b>H</b> bu paneli gizle
@@ -654,6 +665,39 @@ function fuseTex(){
 }
 const M_FUSE = new THREE.MeshPhongMaterial({map:fuseTex(), shininess:75, specular:0x606060});
 
+/* ---------------- ışıklar ---------------- */
+function glowTex(){
+  const c = cv(64,64), g = c.getContext('2d');
+  const rg = g.createRadialGradient(32,32,0,32,32,32);
+  rg.addColorStop(0,'rgba(255,255,255,1)');
+  rg.addColorStop(0.25,'rgba(255,255,255,0.55)');
+  rg.addColorStop(1,'rgba(255,255,255,0)');
+  g.fillStyle=rg; g.fillRect(0,0,64,64);
+  return tex(c);
+}
+const GLOW = glowTex();
+const LIGHTS = {beacon:[], strobe:[], nav:[], landing:[]};
+function mkLight(parent, x,y,z, col, size, glow, group){
+  const m = new THREE.Mesh(new THREE.SphereGeometry(size,8,6),
+    new THREE.MeshBasicMaterial({color:col}));
+  m.position.set(x,y,z);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW, color:col,
+    transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, fog:false}));
+  sp.scale.set(glow,glow,1); m.add(sp);
+  m.userData.col = new THREE.Color(col);
+  m.userData.sp = sp;
+  parent.add(m);
+  if(group) LIGHTS[group].push(m);
+  return m;
+}
+function setLight(m, on){
+  if(m._on === on) return;
+  m._on = on;
+  m.material.color.copy(on ? m.userData.col : OFF_LAMP);
+  m.userData.sp.visible = on;
+}
+const OFF_LAMP = new THREE.Color(0x2a2f33);
+
 /* ---------------- gövde ---------------- */
 hull( 26.0, 3.57,  0.00, -24.0, 3.57,  0.00, M_FUSE);          // çift katlı kabin
 hull(-24.0, 3.57,  0.00, -28.0, 2.05, -1.30, M_BODY);          // uçuş güvertesi kabuğu
@@ -690,9 +734,8 @@ for(const [g,sgn] of [[wingL,-1],[wingR,1]]){
   const fence = new THREE.Mesh(wingGeo(3.4, 3.2, 1.4, 0.35, 1.2), M_WING);
   fence.scale.x = sgn; fence.rotation.z = sgn*Math.PI/2.1;
   fence.position.set(sgn*36.6, 0, 23.3); g.add(fence);
-  const nav = new THREE.Mesh(new THREE.SphereGeometry(0.28,8,6),
-    new THREE.MeshBasicMaterial({color: sgn<0?0xff2a1a:0x25ff6e}));
-  nav.position.set(sgn*36.9, 0.3, 23.6); g.add(nav);
+  mkLight(g, sgn*36.9, 0.30, 23.4, sgn<0?0xff2a1a:0x25ff6e, 0.30, 3.2, 'nav');
+  mkLight(g, sgn*36.6, 0.34, 24.2, 0xffffff, 0.26, 5.0, 'strobe');
   g.position.set(sgn*3.00, -3.40, 8.25);
   g.rotation.z = sgn*DEG(5.6);
   ext.add(g);
@@ -710,7 +753,7 @@ const ailL   = hinged(wingL, -30.0, 15.41,  8.0, 1.4, M_WING, 0.26);
 const ailR   = hinged(wingR,  30.0, 15.41,  8.0, 1.4, M_WING, 0.26);
 
 /* ---------------- 4 motor ---------------- */
-const fans = [];
+const fans = [], revCowls = [];
 function nacelle(x, y, z, R){
   const g = new THREE.Group();
   const shell = new THREE.Mesh(new THREE.CylinderGeometry(R*0.94, R, 7.0, 26, 1, true), M_WING);
@@ -730,8 +773,15 @@ function nacelle(x, y, z, R){
   fan.position.z = -2.95; g.add(fan); fans.push(fan);
   const ex = new THREE.Mesh(new THREE.CylinderGeometry(R*0.58, R*0.38, 2.4, 20), M_METAL);
   ex.rotation.x = Math.PI/2; ex.position.z = 4.3; g.add(ex);
-  const band = new THREE.Mesh(new THREE.CylinderGeometry(R*1.005, R*1.005, 0.45, 26, 1, true), M_METAL);
-  band.rotation.x = Math.PI/2; band.position.z = 3.1; g.add(band);
+  // kayan kapak (ters itki açılınca geri kayar, kafesler görünür)
+  const rev = new THREE.Group(); g.add(rev);
+  const cowl = new THREE.Mesh(new THREE.CylinderGeometry(R*1.01, R*0.99, 1.6, 26, 1, true), M_WING);
+  cowl.rotation.x = Math.PI/2; cowl.position.z = 2.9; rev.add(cowl);
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(R*1.02, R*1.02, 0.35, 26, 1, true), M_METAL);
+  band.rotation.x = Math.PI/2; band.position.z = 2.2; rev.add(band);
+  const cascade = new THREE.Mesh(new THREE.CylinderGeometry(R*0.97, R*0.97, 1.3, 26, 1, true), M_DARK);
+  cascade.rotation.x = Math.PI/2; cascade.position.z = 2.7; g.add(cascade);
+  revCowls.push(rev);
   const pyl = new THREE.Mesh(new THREE.BoxGeometry(0.95, 3.0, 6.4), M_WING);
   pyl.position.set(0, R*0.80 + 1.1, 2.6); g.add(pyl);
   g.position.set(x, y, z);
@@ -780,22 +830,30 @@ const elev = new THREE.Group(); elev.position.set(0, 2.30, 39.0); ext.add(elev);
 (function(){ const m = surf(30.0, 2.4, 0.45, M_WING); m.position.z = 1.2; elev.add(m); })();
 
 /* ---------------- iniş takımları (22 tekerlek) ---------------- */
+const GEAR_TRAVEL = 0.60, GEAR_STATIC = 0.35;
 function gearLeg(x,z,py,strutL,wr,axles,track){
   const piv = new THREE.Group(); piv.position.set(x,py,z);
-  const st = new THREE.Mesh(new THREE.CylinderGeometry(0.30,0.24,strutL,10), M_METAL);
-  st.position.y = -strutL/2; piv.add(st);
+  // dış silindir sabit, iç piston amortisörle hareket eder
+  const outer = new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.32,strutL*0.55,10), M_METAL);
+  outer.position.y = -strutL*0.275; piv.add(outer);
+  const axle = new THREE.Group(); axle.position.y = -strutL; piv.add(axle);
+  const piston = new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.22,strutL*0.62,10),
+    new THREE.MeshPhongMaterial({color:0xcdd3d8, shininess:150}));
+  piston.position.y = strutL*0.31; axle.add(piston);
   const bog = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.30, axles.length>1?
     (axles[axles.length-1]-axles[0])+0.8 : 0.8), M_METAL);
-  bog.position.y = -strutL; piv.add(bog);
+  axle.add(bog);
   const wheels = [];
   for(const az of axles) for(const sg of [-1,1]){
     const w = new THREE.Mesh(new THREE.TorusGeometry(wr, wr*0.40, 8, 18), M_RUBBER);
-    w.rotation.y = Math.PI/2; w.position.set(sg*track/2, -strutL, az); piv.add(w);
+    w.rotation.y = Math.PI/2; w.position.set(sg*track/2, 0, az); axle.add(w);
     const h = new THREE.Mesh(new THREE.CylinderGeometry(wr*0.46,wr*0.46,0.30,12), M_METAL);
-    h.rotation.z = Math.PI/2; h.position.set(sg*track/2, -strutL, az); piv.add(h);
+    h.rotation.z = Math.PI/2; h.position.set(sg*track/2, 0, az); axle.add(h);
     wheels.push(w);
   }
   piv.userData.wheels = wheels;
+  piv.userData.axle = axle;
+  piv.userData.base = -strutL;
   ext.add(piv); return piv;
 }
 const gearN  = gearLeg(  0.0, -20.5, -3.85, 2.43, 0.62, [0],              1.00);
@@ -810,10 +868,24 @@ const GEARS  = [gearN, gearL, gearR, gearBL, gearBR];
 (function(){
   const a = new THREE.Mesh(new THREE.BoxGeometry(0.16,1.30,2.4), M_WINGD);
   a.position.set(0, 4.55, 8.0); ext.add(a);
-  const bcn = new THREE.Mesh(new THREE.SphereGeometry(0.26,8,6),
-    new THREE.MeshBasicMaterial({color:0xff2a1a}));
-  bcn.position.set(0,-4.30,4.0); ext.add(bcn);
+  mkLight(ext, 0,  4.28,  3.0, 0xff2a1a, 0.26, 3.0, 'beacon');   // üst çakar
+  mkLight(ext, 0, -4.90,  6.0, 0xff2a1a, 0.26, 3.0, 'beacon');   // alt çakar
+  mkLight(ext, 0,  2.55, 41.6, 0xffffff, 0.24, 3.0, 'nav');      // kuyruk seyir
+  mkLight(ext, 0,  2.40, 41.4, 0xffffff, 0.26, 5.0, 'strobe');   // kuyruk strobe
+  mkLight(ext, -5.2, -3.55, -0.6, 0xfff4d8, 0.34, 6.5, 'landing');
+  mkLight(ext,  5.2, -3.55, -0.6, 0xfff4d8, 0.34, 6.5, 'landing');
+  mkLight(gearN, 0, -1.10, -0.55, 0xfff4d8, 0.22, 3.4, 'landing');
 })();
+
+/* ---------------- spoyler / hava freni ---------------- */
+const SPOILERS = [];
+function spoiler(parent, x, z, w, c){
+  const piv = new THREE.Group(); piv.position.set(x, 0.42, z); parent.add(piv);
+  const m = surf(w, c, 0.14, M_WING); m.position.z = c/2; piv.add(m);
+  SPOILERS.push(piv); return piv;
+}
+spoiler(wingL,  -6.0, 7.00, 10.0, 2.2); spoiler(wingR,  6.0, 7.00, 10.0, 2.2);
+spoiler(wingL, -16.5, 9.90,  9.0, 1.8); spoiler(wingR, 16.5, 9.90,  9.0, 1.8);
 
 /* =========================================================================
    GÖSTERGELER — canvas ile çizilen gerçek uçuş aletleri
@@ -886,7 +958,7 @@ function drawASI(x, kt){
   glass(x);
 }
 /* --- suni ufuk --- */
-function drawAI(x, pitch, bank){
+function drawAI(x, pitch, bank, ils){
   x.clearRect(0,0,GD,GD);
   const g = x.createLinearGradient(0,0,0,GD);
   g.addColorStop(0,'#3a4046'); g.addColorStop(1,'#0e1113');
@@ -934,6 +1006,27 @@ function drawAI(x, pitch, bank){
   x.moveTo(-30,0); x.lineTo(-30,13); x.moveTo(30,0); x.lineTo(30,13); x.stroke();
   x.fillStyle='#ffc233'; x.beginPath(); x.arc(0,0,5,0,7); x.fill();
   x.restore();
+  if(ils && ils.live){
+    // lokalizer (alt) ve glideslope (sağ) sapma göstergeleri
+    const ly = GC+GR*0.80, gx = GC+GR*0.82;
+    for(let i=-2;i<=2;i++){
+      if(i===0) continue;
+      x.fillStyle='#c3ccd2';
+      x.beginPath(); x.arc(GC+i*GR*0.30, ly, 4, 0, 7); x.fill();
+      x.beginPath(); x.arc(gx, GC+i*GR*0.30, 4, 0, 7); x.fill();
+    }
+    line(x,GC,ly-GR*0.10,GC,ly+GR*0.10,2.4,'#e8eef2');
+    line(x,gx-GR*0.10,GC,gx+GR*0.10,GC,2.4,'#e8eef2');
+    function dia(px,py,col){
+      x.fillStyle=col; x.beginPath();
+      x.moveTo(px,py-9); x.lineTo(px+9,py); x.lineTo(px,py+9); x.lineTo(px-9,py);
+      x.closePath(); x.fill();
+    }
+    dia(GC + clamp(ils.loc/2.5,-1.05,1.05)*GR*0.60, ly, '#e46bff');
+    dia(gx, GC - clamp(ils.gsd/0.7,-1.05,1.05)*GR*0.60, '#e46bff');
+    txt(x,'LOC',GC-GR*0.72,ly,11,'#a98ab8');
+    txt(x,'G/S',gx,GC-GR*0.78,11,'#a98ab8');
+  }
   txt(x,'ATTITUDE',GC,GC*1.66,12,'#7d878e');
   glass(x);
 }
@@ -1288,6 +1381,8 @@ const F = {
   om:new THREE.Vector3(),
   thr:0, thrTgt:0, n1:0, eng:false, starting:0,
   flap:0, gearDown:true, gearPos:1, brake:false,
+  spoilerCmd:0, spoiler:0, spArmed:false, revCmd:false, rev:0,
+  comp:GEAR_STATIC, compV:0, lts:{land:false, strobe:false},
   fuel:1, oil:0.2, egt:0.1,
   ground:true, crashed:false, aoa:0, slip:0, gLoad:1, stall:0, buffet:0, trimA:0.02,
   pitchIn:0, rollIn:0, yawIn:0
@@ -1303,6 +1398,9 @@ function resetPlane(){
   F.quat.identity();
   F.thr=0; F.thrTgt=0; F.n1 = F.eng?22:0;
   F.flap=0; F.gearDown=true; F.gearPos=1; F.brake=false;
+  F.spoilerCmd=0; F.spoiler=0; F.spArmed=false; F.revCmd=false; F.rev=0;
+  F.comp=GEAR_STATIC; F.compV=0;
+  AP.on=false; AP.at=false; AP.appr=false;
   F.ground=true; F.crashed=false; F.fuel=1; F.oil=0.2; F.egt=0.1;
   F.pitchIn=F.rollIn=F.yawIn=0; F.buffet=0; F.trimA=0.02;
   look.set(0,0); lookT.set(0,0);
@@ -1346,8 +1444,8 @@ function physics(dt){
   let cl = CL0 + CLA*F.aoa + flapDeg*0.020;
   const over = smoothstep(STALL_A, STALL_A+DEG(8), Math.abs(F.aoa));
   F.stall = over;
-  cl *= (1 - 0.78*over);
-  const cd = CD0 + KIND*cl*cl + over*0.10 + flapDeg*0.0016 + F.gearPos*0.016
+  cl *= (1 - 0.78*over) * (1 - 0.38*F.spoiler);
+  const cd = CD0 + KIND*cl*cl + over*0.10 + flapDeg*0.0016 + F.gearPos*0.016 + F.spoiler*0.075
              + 0.085*smoothstep(168, 215, ve);        // yüksek hız direnç artışı
   const qd = 0.5*rho*V*V;
 
@@ -1360,7 +1458,7 @@ function physics(dt){
     _f.addScaledVector(_rt, -qd*SREF*0.70*F.slip);
   }
   const tAvail = MAXT * power * Math.pow(rho/1.225, 0.85) * (1 - 0.22*clamp(V/250,0,1.1));
-  _f.addScaledVector(_fwd, Math.max(tAvail,0));
+  _f.addScaledVector(_fwd, Math.max(tAvail,0) * (1 - 1.42*F.rev));   // ters itki
   _f.y -= MASS*GRAV;
 
   F.gLoad = damp(F.gLoad, V>6 ? clamp(qd*SREF*cl/(MASS*GRAV),-3,6) : 1, 8, dt);
@@ -1403,6 +1501,7 @@ function physics(dt){
         toast(vy<-2.0 ? 'SERT AMA SAĞLAM İNİŞ · '+Math.round(-vy*197)+' FPM'
                       : 'YUMUŞAK İNİŞ · '+Math.round(-vy*197)+' FPM');
       }
+      F.compV = Math.min(-vy*1.15, 6);      // tekerlek darbesi
     }
     F.ground = true;
     if(F.vel.y<0) F.vel.y = 0;
@@ -1434,6 +1533,21 @@ function physics(dt){
     F.ground = false;
   }
 
+  /* --- amortisör yayı --- */
+  if(F.ground){
+    F.compV += ((GEAR_STATIC - F.comp)*95 - F.compV*8)*dt;
+    F.comp = clamp(F.comp + F.compV*dt, 0, 1);
+  } else {
+    F.comp = damp(F.comp, 0.02, 2.2, dt);
+    F.compV = 0;
+  }
+
+  /* --- spoyler / ters itki --- */
+  const gsAuto = F.ground && F.spArmed && Math.hypot(F.vel.x,F.vel.z) > 12;
+  F.spoiler = damp(F.spoiler, gsAuto ? 1 : F.spoilerCmd, 3.2, dt);
+  const revOk = F.ground && F.eng && Math.hypot(F.vel.x,F.vel.z) > 8;
+  F.rev = damp(F.rev, (F.revCmd && revOk) ? 1 : 0, 2.4, dt);
+
   const rough = F.ground ? clamp(Math.hypot(F.vel.x,F.vel.z)/110,0,1)*0.45 : 0;
   F.buffet = damp(F.buffet, over*1.0 + rough, 8, dt);
 }
@@ -1443,6 +1557,56 @@ function crash(reason){
   F.crashed = true; F.eng=false; F.thrTgt=0; F.thr=0;
   msg('KAZA', reason+' · R ile piste dön', true);
   sfx.crash();
+}
+
+/* =========================================================================
+   ILS 36 + OTOPİLOT
+   ========================================================================= */
+const ILS = { tdz: 1300, elev: FIELD_ELEV, hdg: 360, gs: 3.0 };
+function ilsData(){
+  const d = F.pos.z - ILS.tdz;                       // eşiğe kalan mesafe (m)
+  if(d < -600 || d > 46000) return null;
+  const dd = Math.max(d, 60);
+  const loc = RAD(Math.atan2(F.pos.x, dd));          // ° · sağa sapma pozitif
+  const gsIdeal = ILS.elev + Math.tan(DEG(ILS.gs))*Math.max(d,0);
+  const gsd = RAD(Math.atan2(F.pos.y - gsIdeal, dd));// ° · yukarıda pozitif
+  return { d, loc, gsd, gsIdeal, live: Math.abs(loc)<12 && d>-400 };
+}
+
+const AP = { on:false, at:false, appr:false, hdg:360, alt:5000, spd:250 };
+function apEngage(){
+  const e = getEuler();
+  AP.hdg = (RAD(Math.atan2(_fwd.x, -_fwd.z))+360)%360;
+  AP.alt = Math.round(F.pos.y*3.28084/100)*100;
+  AP.on = true;
+}
+function autopilot(dt, e, hdg, kt){
+  if(F.crashed || F.ground){ if(AP.on||AP.at||AP.appr){AP.on=AP.at=AP.appr=false;} return; }
+  const ils = AP.appr ? ilsData() : null;
+  let tHdg = AP.hdg;
+  let tVS  = clamp((AP.alt - F.pos.y*3.28084)*0.85, -1800, 1800);
+
+  if(ils && ils.live){
+    tHdg = ILS.hdg - clamp(ils.loc*2.6, -30, 30);            // lokalizer takibi
+    const gsCap = ils.gsd < 0.9 && ils.d < 22000;
+    tVS = gsCap ? clamp(-(Math.tan(DEG(ILS.gs))*Math.hypot(F.vel.x,F.vel.z)*196.85)
+                        - ils.gsd*1500, -1500, 400)
+                : clamp((AP.alt - F.pos.y*3.28084)*0.85, -1200, 1200);
+  }
+  if(AP.on){
+    let he = ((tHdg - hdg + 540)%360) - 180;
+    const bank = -RAD(e.z), pit = RAD(e.x);
+    const tBank = clamp(he*1.5, -25, 25);
+    F.rollIn  = clamp((tBank - bank)*0.085, -1, 1);
+    const vs  = F.vel.y*196.85;
+    const tPit = clamp(pit + (tVS - vs)*0.0038, -7, 14);
+    F.pitchIn = clamp((tPit - pit)*0.42, -1, 1);
+    F.yawIn   = 0;
+  }
+  if(AP.at){
+    const se = AP.spd - kt;
+    F.thrTgt = clamp(F.thrTgt + clamp(se,-40,40)*0.0022*dt*60, 0, 1);
+  }
 }
 
 /* =========================================================================
@@ -1487,9 +1651,9 @@ const sfx = {
   applyVol(){ if(this.ok) this.master.gain.setTargetAtTime(this.muted?0:this.vol, this.a.currentTime, 0.03); },
   setVol(v){ this.vol = clamp(v,0,1); this.muted=false; this.applyVol(); },
   toggleMute(){ this.muted = !this.muted; this.applyVol(); },
-  update(n1, V, stall){
+  update(n1, V, stall, rev){
     if(!this.ok) return;
-    const t = this.a.currentTime, n = clamp(n1/100,0,1.1);
+    const t = this.a.currentTime, n = clamp(n1/100,0,1.1)*(1+(rev||0)*0.45);
     this.cf.frequency.setTargetAtTime(120+n*520, t, 0.15);
     this.cg.gain.setTargetAtTime(n>0.03 ? 0.05+n*0.42 : 0, t, 0.2);
     this.whine.frequency.setTargetAtTime(180+n*1750, t, 0.15);
@@ -1550,6 +1714,26 @@ addEventListener('keydown', e=>{
       hint.style.display = help.classList.contains('hidden')?'block':'none'; break;
     case 'KeyX': lookT.set(0,0); break;
     case 'KeyP': setQuality((perf.level+1)%3, true); break;
+    case 'KeyL': F.lts.land = !F.lts.land; sfx.click();
+      toast('İNİŞ FARLARI '+(F.lts.land?'AÇIK':'KAPALI')); break;
+    case 'Space':
+      if(F.ground){ F.spoilerCmd = F.spoilerCmd>0.5?0:1; }
+      else { F.spArmed = !F.spArmed; F.spoilerCmd = F.spoilerCmd>0.5?0:1; }
+      sfx.click(); toast('SPOYLER '+(F.spoilerCmd>0.5?'AÇIK':'KAPALI')); break;
+    case 'KeyK': F.spArmed = !F.spArmed; sfx.click();
+      toast('YER SPOYLERİ '+(F.spArmed?'KURULDU':'İPTAL')); break;
+    case 'Digit1':
+      if(F.ground){ toast('OTOPİLOT YERDE DEVREYE GİRMEZ'); break; }
+      if(AP.on){ AP.on=false; AP.appr=false; toast('OTOPİLOT KAPALI'); }
+      else { apEngage(); toast('OTOPİLOT · HDG '+Math.round(AP.hdg)+'° · '+AP.alt+' FT'); }
+      sfx.click(); break;
+    case 'Digit3':
+      AP.at = !AP.at; if(AP.at) AP.spd = Math.max(Math.round(F.vel.length()*1.94384/5)*5, 160);
+      sfx.click(); toast('OTO GAZ '+(AP.at?('AÇIK · '+AP.spd+' KT'):'KAPALI')); break;
+    case 'Digit4':
+      AP.appr = !AP.appr;
+      if(AP.appr){ if(!AP.on) apEngage(); AP.at = true; AP.spd = 145; }
+      sfx.click(); toast('ILS YAKLAŞMA '+(AP.appr?'KURULDU · RWY 36':'İPTAL')); break;
     case 'Digit8': case 'Numpad8': sfx.init(); sfx.setVol(sfx.vol+0.1); volToast(); break;
     case 'Digit2': case 'Numpad2': sfx.init(); sfx.setVol(sfx.vol-0.1); volToast(); break;
     case 'Digit5': case 'Numpad5': sfx.init(); sfx.toggleMute(); volToast(); break;
@@ -1575,9 +1759,15 @@ addEventListener('mousemove', e=>{
 });
 
 function readInput(dt){
-  const p = (K.KeyS||K.ArrowDown?1:0) - (K.KeyW||K.ArrowUp?1:0);
-  const r = (K.KeyA||K.ArrowLeft?1:0) - (K.KeyD||K.ArrowRight?1:0);
+  let p = (K.KeyS||K.ArrowDown?1:0) - (K.KeyW||K.ArrowUp?1:0);
+  let r = (K.KeyA||K.ArrowLeft?1:0) - (K.KeyD||K.ArrowRight?1:0);
   const y = (K.KeyQ?1:0) - (K.KeyE?1:0);
+  if(AP.on){                                   // otopilot açıkken tuşlar hedef ayarlar
+    if(p) AP.alt = clamp(AP.alt - p*900*dt, 0, 43000);
+    if(r) AP.hdg = (AP.hdg + r*9*dt + 360) % 360;
+    p = 0; r = 0;
+  }
+  F.revCmd = !!K.KeyZ;
   F.pitchIn = damp(F.pitchIn, F.crashed?0:p, 6.5, dt);
   F.rollIn  = damp(F.rollIn,  F.crashed?0:r, 7.5, dt);
   F.yawIn   = damp(F.yawIn,   F.crashed?0:y, 6.0, dt);
@@ -1642,6 +1832,8 @@ const cThr=document.getElementById('cThr'), cGear=document.getElementById('cGear
       cFlap=document.getElementById('cFlap'), cView=document.getElementById('cView'),
       cFuel=document.getElementById('cFuel'), cVol=document.getElementById('cVol'),
       cFps=document.getElementById('cFps'),
+      cAp=document.getElementById('cAp'), cAt=document.getElementById('cAt'),
+      cIls=document.getElementById('cIls'), cSpl=document.getElementById('cSpl'),
       thrFill=document.getElementById('thrFill'),
       warnEl=document.getElementById('warn'), toastEl=document.getElementById('toast'),
       help=document.getElementById('help'), hint=document.getElementById('hint'),
@@ -1669,6 +1861,15 @@ function updateHUD(dt, kt){
           F.gearPos>0.98?'on':(F.gearPos<0.02?'':'hot'));
   setChip(cFlap, FLAP_SET[F.flap]+'°', F.flap?'hot':'');
   setChip(cFuel, Math.round(F.fuel*100)+'%', F.fuel<0.18?'bad':(F.fuel<0.35?'hot':''));
+  setChip(cAp, AP.on ? Math.round(AP.hdg)+'° · '+AP.alt+'ft' : 'KAPALI', AP.on?'on':'');
+  setChip(cAt, AP.at ? AP.spd+' kt' : 'KAPALI', AP.at?'on':'');
+  setChip(cSpl, F.rev>0.05 ? 'TERS İTKİ' : Math.round(F.spoiler*100)+'%',
+          F.rev>0.05?'bad':(F.spoiler>0.05?'hot':(F.spArmed?'on':'')));
+  const _ils = ilsData();
+  setChip(cIls, !AP.appr ? '—' : (_ils && _ils.live
+        ? (Math.round(_ils.d/185.2)/10)+' NM · '+(_ils.gsd>0?'+':'')+_ils.gsd.toFixed(1)+'°'
+        : 'ARANIYOR'),
+        AP.appr ? (_ils&&_ils.live?'on':'hot') : '');
   const st = F.stall>0.25 && !F.ground;
   const wt = F.fuel<=0 ? 'YAKIT' : 'STALL';
   if(wt !== warnEl.textContent) warnEl.textContent = wt;
@@ -1723,6 +1924,29 @@ function updateVisuals(dt, kt, ftAlt, fpm, hdg, e, turnRate){
   const fanSpin = (0.3 + F.n1/100*3.4)*dt;
   for(const f of fans) f.rotation.z += fanSpin;
 
+  // amortisörler
+  const axY = (F.comp - GEAR_STATIC)*GEAR_TRAVEL;
+  for(const g of GEARS) g.userData.axle.position.y = g.userData.base + axY;
+
+  // spoyler / hava freni
+  const spA = -F.spoiler*DEG(48);
+  for(const sp of SPOILERS) sp.rotation.x = spA;
+
+  // ters itki kapakları
+  for(const rc of revCowls) rc.position.z = F.rev*1.15;
+
+  // dış ışıklar
+  const T = performance.now();
+  const elec = F.eng || F.starting>0;
+  const bOn = elec && (T % 900) < 130;                       // çakar
+  const sc2 = T % 1700;
+  const sOn = (!F.ground || Math.hypot(F.vel.x,F.vel.z)>5) &&
+              (sc2 < 55 || (sc2 > 170 && sc2 < 225));        // çift strobe
+  for(const m of LIGHTS.beacon)  setLight(m, bOn);
+  for(const m of LIGHTS.strobe)  setLight(m, sOn);
+  for(const m of LIGHTS.nav)     setLight(m, true);
+  for(const m of LIGHTS.landing) setLight(m, F.lts.land);
+
   // sahne takibi
   sky.position.set(F.pos.x, 0, F.pos.z);
   sea.position.set(F.pos.x, SEA, F.pos.z);
@@ -1736,7 +1960,7 @@ function updateVisuals(dt, kt, ftAlt, fpm, hdg, e, turnRate){
   gaugeAcc += dt;
   if(gaugeAcc >= 1/30){
     gaugeAcc -= 1/30;
-    drawAI(G.ai.x, RAD(e.x), -RAD(e.z)); G.ai.t.needsUpdate = true;
+    drawAI(G.ai.x, RAD(e.x), -RAD(e.z), ilsData()); G.ai.t.needsUpdate = true;
   }
   const n = Math.max(F.n1,0);
   for(let q=0; q<perf.gaugesPerFrame; q++){
@@ -1813,6 +2037,10 @@ function frame(now){
   frameNo++;
 
   readInput(dt);
+  _fwd.set(0,0,-1).applyQuaternion(F.quat);
+  autopilot(dt, getEuler(),
+            (RAD(Math.atan2(_fwd.x, -_fwd.z))+360)%360,
+            F.vel.length()*1.94384);
   if(!F.crashed) physics(dt);
   else {
     F.vel.multiplyScalar(Math.exp(-2.5*dt));
@@ -1836,7 +2064,7 @@ function frame(now){
   updateVisuals(dt, kt, ftAlt, fpm, hdg, e, turnRateSm);
   updateCamera(dt);
   updateHUD(dt, kt);
-  sfx.update(F.n1, V, F.stall);
+  sfx.update(F.n1, V, F.stall, F.rev);
 
   if(!F.eng && F.starting<=0 && !F.crashed && F.ground && V<3) msg('MOTORLAR KAPALI','Çalıştırmak için ENTER');
   else if(!F.crashed && (F.eng||F.starting>0)) msg(null);
