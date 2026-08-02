@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>ECOOMEDYA · Uçuş Simülatörü</title>
+<title>byecoandhaşo · Uçuş Simülatörü</title>
 <style>
   :root{
     --ink:#05070a;
@@ -126,7 +126,7 @@
 <div id="boot">
   <div class="brand">ECOOMEDYA · AVIATION</div>
   <h1>UÇUŞ SİMÜLATÖRÜ</h1>
-  <div class="sub">İki motorlu dar gövde jet · gerçek altı temel gösterge · prosedürel arazi, kıyı şeridi ve 3200 m pist</div>
+  <div class="sub">Airbus A380 · TC-ECO · gerçek altı temel gösterge · prosedürel arazi, kıyı şeridi ve 3200 m pist</div>
   <div class="bar"><i id="bootBar"></i></div>
   <button id="startBtn">Kokpite Geç</button>
 </div>
@@ -295,11 +295,11 @@ scene.add(sky);
 /* --- ışıklar --- */
 const sunDir = new THREE.Vector3(0.35,0.55,-0.75).normalize();
 const sun = new THREE.DirectionalLight(0xfff0d8, 1.15);
-sun.position.copy(sunDir).multiplyScalar(300);
+sun.position.copy(sunDir).multiplyScalar(700);
 sun.castShadow = true;
 sun.shadow.mapSize.set(1024,1024);
 const sc = sun.shadow.camera;
-sc.near=1; sc.far=900; sc.left=-170; sc.right=170; sc.top=170; sc.bottom=-170;
+sc.near=1; sc.far=1400; sc.left=-260; sc.right=260; sc.top=260; sc.bottom=-260;
 scene.add(sun); scene.add(sun.target);
 scene.add(new THREE.HemisphereLight(0xa8c6e0, 0x4d4a3c, 0.62));
 scene.add(new THREE.AmbientLight(0xffffff, 0.18));
@@ -554,40 +554,43 @@ function updateClouds(px,pz){
 }
 
 /* =========================================================================
-   UÇAK — iki motorlu dar gövde yolcu jeti (Boeing tarzı)
+   UÇAK — Airbus A380 (Turkish Airlines boyaması)
    ========================================================================= */
-const GEAR_H = 2.30;            // ağırlık merkezi ile tekerlek altı arası
-const FY = 0.90;                // gövde ekseni yüksekliği
+const GEAR_H = 6.90;            // ağırlık merkezi ile tekerlek altı arası
+const OY = 1.18;                // gövde oval oranı (8.4 m yükseklik / 7.14 m genişlik)
 const plane = new THREE.Group(); scene.add(plane);
 const ext = new THREE.Group(); plane.add(ext);
 
-const M_BODY  = new THREE.MeshPhongMaterial({color:0xf3f5f7, shininess:85, specular:0x707070});
-const M_TRIM  = new THREE.MeshPhongMaterial({color:0x16386e, shininess:70});
-const M_TRIM2 = new THREE.MeshPhongMaterial({color:0xd9531e, shininess:70});
+const TK_RED  = 0xd8232a, TK_BLUE = 0x1b3b73;
+const M_BODY  = new THREE.MeshPhongMaterial({color:0xf5f7f8, shininess:80, specular:0x707070});
+const M_TRIM  = new THREE.MeshPhongMaterial({color:TK_RED,  shininess:70});
+const M_TRIM2 = new THREE.MeshPhongMaterial({color:TK_BLUE, shininess:70});
 const M_DARK  = new THREE.MeshPhongMaterial({color:0x1b2126, shininess:40});
 const M_METAL = new THREE.MeshPhongMaterial({color:0x9aa1a7, shininess:130, specular:0xc8c8c8});
 const M_RUBBER= new THREE.MeshLambertMaterial({color:0x141618});
-const M_GLASS = new THREE.MeshPhongMaterial({color:0x16303f, shininess:170, specular:0xffffff,
-                                             transparent:true, opacity:0.55, side:THREE.DoubleSide});
+const M_GLASS = new THREE.MeshPhongMaterial({color:0x14293a, shininess:170, specular:0xffffff,
+                                             transparent:true, opacity:0.78, side:THREE.DoubleSide});
 const M_WING  = M_BODY.clone();  M_WING.side  = THREE.DoubleSide;
 const M_WINGD = M_DARK.clone();  M_WINGD.side = THREE.DoubleSide;
-const M_WINGT = M_TRIM.clone();  M_WINGT.side = THREE.DoubleSide;
+const M_WINGR = M_TRIM.clone();  M_WINGR.side = THREE.DoubleSide;
 
-function tube(rA,rB,len,seg,mat,y,z,tilt){
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(rA,rB,len,seg||20,1,false), mat);
-  m.rotation.x = Math.PI/2 + (tilt||0);
-  m.position.set(0, y, z);
+/* gövde bölümü: iki kesit arasını konik oval boru ile bağlar */
+function hull(zA,rA,cyA, zB,rB,cyB, mat, oy, seg){
+  const dz = zA - zB, dy = cyA - cyB, L = Math.hypot(dz,dy);
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rA, rB, L, seg||30, 1, true), mat);
+  m.rotation.x = Math.PI/2 - Math.asin(dy/L);
+  m.position.set(0, (cyA+cyB)/2, (zA+zB)/2);
+  m.scale.set(1, 1, oy===undefined?OY:oy);
   m.castShadow = true; m.receiveShadow = true;
-  return m;
+  ext.add(m); return m;
 }
 function wingGeo(span, rootC, tipC, thick, sweep){
   const g = new THREE.BoxGeometry(1,1,1,1,1,1);
   const p = g.attributes.position;
   for(let i=0;i<p.count;i++){
-    const u = p.getX(i)+0.5;
-    const c = lerp(rootC, tipC, u);
+    const u = p.getX(i)+0.5, c = lerp(rootC, tipC, u);
     p.setX(i, u*span);
-    p.setY(i, p.getY(i)*lerp(thick, thick*0.5, u));
+    p.setY(i, p.getY(i)*lerp(thick, thick*0.45, u));
     p.setZ(i, p.getZ(i)*c + u*sweep);
   }
   p.needsUpdate = true; g.computeVertexNormals();
@@ -595,155 +598,221 @@ function wingGeo(span, rootC, tipC, thick, sweep){
 }
 function surf(w,c,t,mat){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,t,c),mat); m.castShadow=true; return m; }
 
-/* --- gövde boyaması (u = çevre, v = boy) --- */
+/* ---------------- THY boyası: iki kat pencere + yazı ---------------- */
 function fuseTex(){
-  const W=512,H=512, c=cv(W,H), g=c.getContext('2d');
-  g.fillStyle='#f3f5f7'; g.fillRect(0,0,W,H);
-  g.fillStyle='#b9c0c6'; g.fillRect(0,0,W*0.085,H); g.fillRect(W*0.915,0,W*0.085,H);
-  for(const u of [0.25,0.75]){
-    g.fillStyle='#16386e'; g.fillRect(W*(u+0.030),0,W*0.030,H);
-    g.fillStyle='#d9531e'; g.fillRect(W*(u+0.062),0,W*0.014,H);
-  }
-  // kabin pencereleri
-  for(const u of [0.25,0.75]){
-    g.fillStyle='#20272e';
-    for(let v=18; v<H-18; v+=10) g.fillRect(W*u-4, v, 8, 5);
-  }
+  const W=512, H=2048, c=cv(W,H), g=c.getContext('2d');
+  // NOT: doku flipY=true ile uygulanır → canvas y=0 kuyruk, y=H burun tarafıdır.
+  const vy = f => H*(1-f);                       // burundan itibaren oran → canvas y
+  g.fillStyle='#f5f7f8'; g.fillRect(0,0,W,H);
+  g.fillStyle='#c6ccd0'; g.fillRect(0,0,W*0.055,H); g.fillRect(W*0.945,0,W*0.055,H);
+  // pencereler: ana güverte u=0.188/0.812 · üst güverte u=0.325/0.675
+  g.fillStyle='#1d242b';
+  for(const u of [0.188,0.812,0.325,0.675])
+    for(let y=vy(0.96); y<vy(0.05); y+=22) g.fillRect(W*u-4, y, 9, 11);
   // kapılar
-  g.fillStyle='rgba(120,132,142,0.55)';
-  for(const u of [0.245,0.745]) for(const v of [0.06,0.34,0.66,0.93])
-    g.fillRect(W*u-9, H*v, 18, 26);
+  g.strokeStyle='rgba(150,160,168,0.8)'; g.lineWidth=2;
+  for(const u of [0.20,0.80,0.318,0.682])
+    for(const f of [0.08,0.34,0.62,0.92]) g.strokeRect(W*u-11, vy(f), 23, 48);
+
+  // gövde yazıları — sağ tarafta (u<0.5) burna doğru, solda kuyruğa doğru yazılır
+  function body(u, fStart, draw){
+    g.save();
+    g.translate(W*u, vy(fStart));
+    g.rotate(u < 0.5 ? Math.PI/2 : -Math.PI/2);
+    draw();
+    g.restore();
+  }
+  function title(u, fStart, t, col, px, align){
+    body(u, fStart, ()=>{
+      g.fillStyle=col; g.font='bold '+px+'px Arial, Helvetica, sans-serif';
+      g.textAlign = align||'left'; g.textBaseline='middle';
+      g.fillText(t, 0, 0);
+    });
+  }
+  function flag(u, fStart){
+    body(u, fStart, ()=>{
+      g.fillStyle='#d8232a'; g.fillRect(0,-22,66,44);
+      g.fillStyle='#ffffff'; g.beginPath(); g.arc(26,0,14,0,7); g.fill();
+      g.fillStyle='#d8232a'; g.beginPath(); g.arc(32,0,11,0,7); g.fill();
+      g.fillStyle='#ffffff'; g.beginPath();
+      for(let i=0;i<10;i++){ const r=(i%2?3:7.5), a2=-Math.PI/2+i*Math.PI/5;
+        g.lineTo(46+r*Math.cos(a2), r*Math.sin(a2)); }
+      g.closePath(); g.fill();
+    });
+  }
+  // sağ taraf (kuyruktan burna doğru okunur)
+  title(0.262, 0.44, 'TURKISH AIRLINES', '#1b3b73', 62);
+  flag (0.262, 0.505);
+  title(0.243, 0.20, 'ISTANBUL', '#1b3b73', 22);
+  title(0.262, 0.94, 'TC-ECO', '#1b3b73', 30);
+  // sol taraf (burundan kuyruğa doğru okunur)
+  title(0.738, 0.16, 'TURKISH AIRLINES', '#1b3b73', 62);
+  flag (0.738, 0.475);
+  title(0.757, 0.16, 'ISTANBUL', '#1b3b73', 22);
+  title(0.738, 0.90, 'TC-ECO', '#1b3b73', 30);
   return tex(c);
 }
-const M_FUSE = new THREE.MeshPhongMaterial({map:fuseTex(), shininess:80, specular:0x666666});
+const M_FUSE = new THREE.MeshPhongMaterial({map:fuseTex(), shininess:75, specular:0x606060});
 
-/* --- gövde bölümleri --- */
-ext.add(tube(1.90,1.90,27.0,24,M_FUSE, FY, 0.5));                    // kabin  z -13.0 .. 14.0
-ext.add(tube(1.90,1.70, 2.7,24,M_BODY, FY, -14.35));                 // ön daralma
-ext.add(tube(1.70,1.05, 1.03,22,M_BODY, 0.775, -16.20, -0.245));     // burun 1
-ext.add(tube(1.05,0.68, 1.207,22,M_BODY, 0.585, -17.30, -0.108));    // burun 2
-ext.add(tube(0.68,0.20, 1.202,22,M_BODY, 0.480, -18.50, -0.067));    // radom
-ext.add(tube(0.45,1.90, 8.58,22,M_BODY, 1.50, 18.25, -0.140));       // kuyruk konisi
+/* ---------------- gövde ---------------- */
+hull( 26.0, 3.57,  0.00, -24.0, 3.57,  0.00, M_FUSE);          // çift katlı kabin
+hull(-24.0, 3.57,  0.00, -28.0, 2.05, -1.30, M_BODY);          // uçuş güvertesi kabuğu
+hull(-28.0, 1.70, -2.20, -29.6, 1.32, -2.50, M_BODY);          // burun (taç -0.19 → -0.94)
+hull(-29.6, 1.32, -2.50, -31.0, 0.45, -2.90, M_BODY, 1.10);    // radom
+hull( 41.5, 0.55,  2.40,  26.0, 3.57,  0.00, M_BODY);          // kuyruk konisi
 (function(){
-  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.22,10,8), M_DARK);
-  cap.position.set(0,0.44,-19.05); ext.add(cap);
-  const apu = new THREE.Mesh(new THREE.ConeGeometry(0.34,1.0,10), M_DARK);
-  apu.rotation.x=-Math.PI/2; apu.position.set(0,2.12,22.9); ext.add(apu);
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.46,12,9), M_DARK);
+  cap.position.set(0,-2.90,-31.0); cap.scale.z=0.8; ext.add(cap);
+  const apu = new THREE.Mesh(new THREE.ConeGeometry(0.45,1.6,10), M_DARK);
+  apu.rotation.x=-Math.PI/2; apu.position.set(0,2.45,42.2); ext.add(apu);
 })();
 
-/* --- kokpit camları (dıştan) --- */
+/* ---------------- kokpit camları (dıştan) ---------------- */
 const extGlass = new THREE.Group(); ext.add(extGlass);
 (function(){
+  const ws = new THREE.Mesh(new THREE.PlaneGeometry(2.95,1.45), M_GLASS);
+  ws.position.set(0, 0.42, -27.74); ws.rotation.x = 0.48; extGlass.add(ws);
   for(const s of [-1,1]){
-    const w = new THREE.Mesh(new THREE.PlaneGeometry(1.15,0.62), M_GLASS);
-    w.position.set(s*0.52, 2.20, -15.55); w.rotation.y = s*0.30; w.rotation.x = -0.16;
-    extGlass.add(w);
-    const w2 = new THREE.Mesh(new THREE.PlaneGeometry(0.72,0.52), M_GLASS);
-    w2.position.set(s*1.16, 2.06, -14.85); w2.rotation.y = s*1.05; extGlass.add(w2);
-    const w3 = new THREE.Mesh(new THREE.PlaneGeometry(0.60,0.46), M_GLASS);
-    w3.position.set(s*1.33, 1.98, -14.15); w3.rotation.y = s*1.35; extGlass.add(w3);
+    const w2 = new THREE.Mesh(new THREE.PlaneGeometry(1.40,1.05), M_GLASS);
+    w2.position.set(s*1.72, 0.52, -27.15); w2.rotation.y = s*0.80; w2.rotation.x = 0.16;
+    extGlass.add(w2);
+    const w3 = new THREE.Mesh(new THREE.PlaneGeometry(1.10,0.85), M_GLASS);
+    w3.position.set(s*2.20, 0.42, -26.20); w3.rotation.y = s*1.22; extGlass.add(w3);
   }
 })();
 
-/* --- kanatlar --- */
+/* ---------------- kanatlar ---------------- */
 const wingL = new THREE.Group(), wingR = new THREE.Group();
 for(const [g,sgn] of [[wingL,-1],[wingR,1]]){
-  const w = new THREE.Mesh(wingGeo(16.4, 6.0, 1.9, 0.55, 6.6), M_WING);
+  const w = new THREE.Mesh(wingGeo(36.9, 17.5, 4.0, 1.60, 15.25), M_WING);
   w.scale.x = sgn; w.castShadow = true; g.add(w);
-  const wl = new THREE.Mesh(wingGeo(2.3, 1.9, 1.0, 0.22, 0.9), M_WINGT);
-  wl.scale.x = sgn; wl.rotation.z = sgn*Math.PI/2.35; wl.position.set(sgn*16.3, 0, 6.5);
-  g.add(wl);
-  const nav = new THREE.Mesh(new THREE.SphereGeometry(0.16,8,6),
+  // kanat ucu perdesi
+  const fence = new THREE.Mesh(wingGeo(3.4, 3.2, 1.4, 0.35, 1.2), M_WING);
+  fence.scale.x = sgn; fence.rotation.z = sgn*Math.PI/2.1;
+  fence.position.set(sgn*36.6, 0, 23.3); g.add(fence);
+  const nav = new THREE.Mesh(new THREE.SphereGeometry(0.28,8,6),
     new THREE.MeshBasicMaterial({color: sgn<0?0xff2a1a:0x25ff6e}));
-  nav.position.set(sgn*16.4, 0.15, 6.9); g.add(nav);
-  g.position.set(sgn*1.60, -0.30, -1.20);
-  g.rotation.z = sgn*DEG(6);
+  nav.position.set(sgn*36.9, 0.3, 23.6); g.add(nav);
+  g.position.set(sgn*3.00, -3.40, 8.25);
+  g.rotation.z = sgn*DEG(5.6);
   ext.add(g);
 }
 function hinged(parent, x, z, w, c, mat, t){
   const piv = new THREE.Group(); piv.position.set(x, 0, z); parent.add(piv);
-  const m = surf(w, c, t||0.20, mat); m.position.z = c/2; piv.add(m);
+  const m = surf(w, c, t||0.45, mat); m.position.z = c/2; piv.add(m);
   return piv;
 }
-const flapL = hinged(wingL, -2.6, 4.15, 5.4, 1.5, M_WING);
-const flapR = hinged(wingR,  2.6, 4.15, 5.4, 1.5, M_WING);
-const ailL  = hinged(wingL,-13.7, 6.55, 4.4, 0.9, M_WING, 0.14);
-const ailR  = hinged(wingR, 13.7, 6.55, 4.4, 0.9, M_WING, 0.14);
+const flapL  = hinged(wingL,  -6.0, 10.13, 11.0, 3.0, M_WING);
+const flapR  = hinged(wingR,   6.0, 10.13, 11.0, 3.0, M_WING);
+const flapL2 = hinged(wingL, -16.5, 12.56, 10.0, 2.3, M_WING);
+const flapR2 = hinged(wingR,  16.5, 12.56, 10.0, 2.3, M_WING);
+const ailL   = hinged(wingL, -30.0, 15.41,  8.0, 1.4, M_WING, 0.26);
+const ailR   = hinged(wingR,  30.0, 15.41,  8.0, 1.4, M_WING, 0.26);
 
-/* --- motorlar --- */
+/* ---------------- 4 motor ---------------- */
 const fans = [];
-function nacelle(sgn){
+function nacelle(x, y, z, R){
   const g = new THREE.Group();
-  const shell = new THREE.Mesh(new THREE.CylinderGeometry(1.00,1.05,4.8,22,1,true), M_WING);
+  const shell = new THREE.Mesh(new THREE.CylinderGeometry(R*0.94, R, 7.0, 26, 1, true), M_WING);
   shell.rotation.x = Math.PI/2; shell.castShadow = true; g.add(shell);
-  const lip = new THREE.Mesh(new THREE.TorusGeometry(1.02,0.10,8,24), M_METAL);
-  lip.position.z = -2.4; g.add(lip);
-  const inlet = new THREE.Mesh(new THREE.CylinderGeometry(0.98,0.98,0.9,22,1,true), M_DARK);
-  inlet.rotation.x = Math.PI/2; inlet.position.z = -1.95; g.add(inlet);
+  const lip = new THREE.Mesh(new THREE.TorusGeometry(R*0.98, 0.16, 8, 28), M_METAL);
+  lip.position.z = -3.5; g.add(lip);
+  const inlet = new THREE.Mesh(new THREE.CylinderGeometry(R*0.90, R*0.90, 1.5, 26, 1, true), M_DARK);
+  inlet.rotation.x = Math.PI/2; inlet.position.z = -2.8; g.add(inlet);
   const fan = new THREE.Group();
-  for(let i=0;i<14;i++){
-    const b = new THREE.Mesh(new THREE.BoxGeometry(0.14,0.86,0.05), M_METAL);
-    b.position.y = 0.50; b.rotation.y = 0.55;
-    const arm = new THREE.Group(); arm.rotation.z = i*Math.PI*2/14; arm.add(b); fan.add(arm);
+  for(let i=0;i<18;i++){
+    const b = new THREE.Mesh(new THREE.BoxGeometry(0.24,R*0.80,0.09), M_METAL);
+    b.position.y = R*0.48; b.rotation.y = 0.55;
+    const arm = new THREE.Group(); arm.rotation.z = i*Math.PI*2/18; arm.add(b); fan.add(arm);
   }
-  const cone = new THREE.Mesh(new THREE.ConeGeometry(0.20,0.55,10), M_DARK);
-  cone.rotation.x = -Math.PI/2; cone.position.z = -0.28; fan.add(cone);
-  fan.position.z = -2.05; g.add(fan); fans.push(fan);
-  const ex = new THREE.Mesh(new THREE.CylinderGeometry(0.62,0.42,1.5,18), M_METAL);
-  ex.rotation.x = Math.PI/2; ex.position.z = 2.9; g.add(ex);
-  const band = new THREE.Mesh(new THREE.CylinderGeometry(1.055,1.055,0.5,22,1,true), M_WINGT);
-  band.rotation.x = Math.PI/2; band.position.z = 1.9; g.add(band);
-  const pyl = new THREE.Mesh(new THREE.BoxGeometry(0.42,1.5,3.2), M_WING);
-  pyl.position.set(0, 1.05, 1.4); g.add(pyl);
-  g.position.set(sgn*5.60, -0.95, -3.20);
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(0.32,0.95,10), M_DARK);
+  cone.rotation.x = -Math.PI/2; cone.position.z = -0.45; fan.add(cone);
+  fan.position.z = -2.95; g.add(fan); fans.push(fan);
+  const ex = new THREE.Mesh(new THREE.CylinderGeometry(R*0.58, R*0.38, 2.4, 20), M_METAL);
+  ex.rotation.x = Math.PI/2; ex.position.z = 4.3; g.add(ex);
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(R*1.005, R*1.005, 0.45, 26, 1, true), M_METAL);
+  band.rotation.x = Math.PI/2; band.position.z = 3.1; g.add(band);
+  const pyl = new THREE.Mesh(new THREE.BoxGeometry(0.95, 3.0, 6.4), M_WING);
+  pyl.position.set(0, R*0.80 + 1.1, 2.6); g.add(pyl);
+  g.position.set(x, y, z);
   ext.add(g); return g;
 }
-nacelle(-1); nacelle(1);
+nacelle(-15.6, -4.10,  4.00, 1.75);   nacelle(15.6, -4.10,  4.00, 1.75);
+nacelle(-26.2, -3.05, 10.30, 1.60);   nacelle(26.2, -3.05, 10.30, 1.60);
 
-/* --- kuyruk --- */
-const fin = new THREE.Mesh(wingGeo(7.0, 5.6, 2.6, 0.45, 4.0), M_WING);
-fin.rotation.z = Math.PI/2; fin.position.set(0, 1.95, 16.8); fin.castShadow = true; ext.add(fin);
+/* kanat-gövde karenajı */
 (function(){
-  const f2 = new THREE.Mesh(wingGeo(7.0, 5.62, 2.62, 0.47, 4.0), M_WINGT);
-  f2.rotation.z = Math.PI/2; f2.scale.z = 0.45; f2.position.set(0, 1.95, 18.6); ext.add(f2);
+  const f = new THREE.Mesh(new THREE.SphereGeometry(1,22,14), M_BODY);
+  f.scale.set(4.02, 2.25, 13.5); f.position.set(0, -2.95, 7.5);
+  f.castShadow = f.receiveShadow = true; ext.add(f);
 })();
-const rud = new THREE.Group(); rud.position.set(0, 4.60, 20.55); ext.add(rud);
-(function(){ const m = surf(0.38, 1.7, 5.6, M_WINGD); m.position.z = 0.85; rud.add(m); })();
 
-const stabL = new THREE.Mesh(wingGeo(6.5,3.8,1.7,0.35,2.6), M_WING);
-stabL.scale.x=-1; stabL.position.set(-0.6, 2.00, 17.6); stabL.castShadow=true; ext.add(stabL);
-const stabR = new THREE.Mesh(wingGeo(6.5,3.8,1.7,0.35,2.6), M_WING);
-stabR.position.set(0.6, 2.00, 17.6); stabR.castShadow=true; ext.add(stabR);
-const elev = new THREE.Group(); elev.position.set(0, 2.00, 20.0); ext.add(elev);
-(function(){ const m = surf(13.4, 1.25, 0.22, M_WING); m.position.z = 0.62; elev.add(m); })();
+/* ---------------- kuyruk ---------------- */
+const fin = new THREE.Mesh(wingGeo(12.7, 12.0, 5.0, 1.00, 8.5), M_WINGR);
+fin.rotation.z = Math.PI/2; fin.position.set(0, 4.30, 28.0); fin.castShadow = true; ext.add(fin);
+(function(){                                   // THY kuyruk amblemi
+  const c = cv(512,512), x = c.getContext('2d');
+  x.clearRect(0,0,512,512);
+  x.fillStyle='#ffffff'; x.beginPath(); x.arc(256,256,150,0,7); x.fill();
+  x.fillStyle='#d8232a';
+  x.beginPath();
+  x.moveTo(150,300); x.bezierCurveTo(180,150, 330,140, 380,215);
+  x.bezierCurveTo(300,190, 215,225, 205,320);
+  x.closePath(); x.fill();
+  x.beginPath(); x.arc(256,256,150,0,7); x.lineWidth=14; x.strokeStyle='#d8232a'; x.stroke();
+  const t = tex(c);
+  for(const s of [-1,1]){
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(5.6,5.6),
+      new THREE.MeshBasicMaterial({map:t, transparent:true}));
+    m.position.set(s*0.55, 12.4, 33.0); m.rotation.y = s*Math.PI/2;
+    if(s<0) m.rotation.y = -Math.PI/2;
+    ext.add(m);
+  }
+})();
+const rud = new THREE.Group(); rud.position.set(0, 10.0, 36.2); ext.add(rud);
+(function(){ const m = surf(0.9, 3.4, 11.0, M_WINGR); m.position.z = 1.7; rud.add(m); })();
 
-/* --- iniş takımları --- */
+const stabL = new THREE.Mesh(wingGeo(14.5, 8.0, 3.0, 0.70, 6.5), M_WING);
+stabL.scale.x=-1; stabL.position.set(-1.6, 2.30, 33.5); stabL.castShadow=true; ext.add(stabL);
+const stabR = new THREE.Mesh(wingGeo(14.5, 8.0, 3.0, 0.70, 6.5), M_WING);
+stabR.position.set(1.6, 2.30, 33.5); stabR.castShadow=true; ext.add(stabR);
+const elev = new THREE.Group(); elev.position.set(0, 2.30, 39.0); ext.add(elev);
+(function(){ const m = surf(30.0, 2.4, 0.45, M_WING); m.position.z = 1.2; elev.add(m); })();
+
+/* ---------------- iniş takımları (22 tekerlek) ---------------- */
 function gearLeg(x,z,py,strutL,wr,axles,track){
   const piv = new THREE.Group(); piv.position.set(x,py,z);
-  const st = new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.13,strutL,10), M_METAL);
+  const st = new THREE.Mesh(new THREE.CylinderGeometry(0.30,0.24,strutL,10), M_METAL);
   st.position.y = -strutL/2; piv.add(st);
+  const bog = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.30, axles.length>1?
+    (axles[axles.length-1]-axles[0])+0.8 : 0.8), M_METAL);
+  bog.position.y = -strutL; piv.add(bog);
   const wheels = [];
-  for(const az of axles) for(const s of [-1,1]){
-    const w = new THREE.Mesh(new THREE.TorusGeometry(wr, wr*0.42, 8, 18), M_RUBBER);
-    w.rotation.y = Math.PI/2; w.position.set(s*track/2, -strutL, az); piv.add(w);
-    const h = new THREE.Mesh(new THREE.CylinderGeometry(wr*0.44,wr*0.44,0.22,12), M_METAL);
-    h.rotation.z = Math.PI/2; h.position.set(s*track/2, -strutL, az); piv.add(h);
+  for(const az of axles) for(const sg of [-1,1]){
+    const w = new THREE.Mesh(new THREE.TorusGeometry(wr, wr*0.40, 8, 18), M_RUBBER);
+    w.rotation.y = Math.PI/2; w.position.set(sg*track/2, -strutL, az); piv.add(w);
+    const h = new THREE.Mesh(new THREE.CylinderGeometry(wr*0.46,wr*0.46,0.30,12), M_METAL);
+    h.rotation.z = Math.PI/2; h.position.set(sg*track/2, -strutL, az); piv.add(h);
     wheels.push(w);
   }
   piv.userData.wheels = wheels;
   ext.add(piv); return piv;
 }
-const gearN = gearLeg(0,   -12.5, -0.80, 1.10, 0.40, [0],        0.62);
-const gearL = gearLeg(-3.4,  1.60, -0.60, 1.15, 0.55, [-0.65,0.65], 1.15);
-const gearR = gearLeg( 3.4,  1.60, -0.60, 1.15, 0.55, [-0.65,0.65], 1.15);
+const gearN  = gearLeg(  0.0, -20.5, -3.85, 2.43, 0.62, [0],              1.00);
+const gearL  = gearLeg( -6.0,   9.20, -3.55, 2.67, 0.68, [-0.9,0.9],       1.45);
+const gearR  = gearLeg(  6.0,   9.20, -3.55, 2.67, 0.68, [-0.9,0.9],       1.45);
+const gearBL = gearLeg( -3.0,  12.60, -3.55, 2.67, 0.68, [-1.8,0,1.8],     1.45);
+const gearBR = gearLeg(  3.0,  12.60, -3.55, 2.67, 0.68, [-1.8,0,1.8],     1.45);
+const MAIN_Z = 10.9;                       // ana takımların boylamasına konumu
+const GEARS  = [gearN, gearL, gearR, gearBL, gearBR];
 
-/* --- anten / far --- */
+/* ---------------- ayrıntılar ---------------- */
 (function(){
-  const a = new THREE.Mesh(new THREE.BoxGeometry(0.10,0.75,1.3), M_WINGD);
-  a.position.set(0, 2.85, 4.0); ext.add(a);
-  const bcn = new THREE.Mesh(new THREE.SphereGeometry(0.16,8,6),
+  const a = new THREE.Mesh(new THREE.BoxGeometry(0.16,1.30,2.4), M_WINGD);
+  a.position.set(0, 4.55, 8.0); ext.add(a);
+  const bcn = new THREE.Mesh(new THREE.SphereGeometry(0.26,8,6),
     new THREE.MeshBasicMaterial({color:0xff2a1a}));
-  bcn.position.set(0,-1.02,2.0); ext.add(bcn);
+  bcn.position.set(0,-4.30,4.0); ext.add(bcn);
 })();
 
 /* =========================================================================
@@ -1005,17 +1074,17 @@ function drawENG(x, fuel, oil, egt){
 }
 
 /* =========================================================================
-   KOKPİT İÇİ — uçuş güvertesi
+   KOKPİT İÇİ — uçuş güvertesi (göz noktası yüksek, panel alt yarıda)
    ========================================================================= */
-const CKY = 0.98, CKZ = -13.80;                 // güverte konumu (gövde içinde)
-const EYE = new THREE.Vector3(-0.50, 1.12+CKY, -0.88+CKZ);
+const CKY = -1.10, CKZ = -25.70;
+const EYE = new THREE.Vector3(-0.48, 1.30+CKY, -0.60+CKZ);  // dünya: (-0.48, 0.20, -26.30) · yerden 7.1 m
 const cockpit = new THREE.Group();
 cockpit.position.set(0, CKY, CKZ); plane.add(cockpit);
 
-const IN_PANEL = new THREE.MeshLambertMaterial({map: grainTex('#191d21', 16)});
-const IN_TRIM  = new THREE.MeshLambertMaterial({map: grainTex('#2f373d', 20)});
-const IN_DARK  = new THREE.MeshLambertMaterial({color:0x0d1012});
-const IN_SEAT  = new THREE.MeshLambertMaterial({map: grainTex('#2a2622', 24)});
+const IN_PANEL = new THREE.MeshLambertMaterial({map: grainTex('#171b1f', 14)});
+const IN_TRIM  = new THREE.MeshLambertMaterial({map: grainTex('#2c333a', 18)});
+const IN_DARK  = new THREE.MeshLambertMaterial({color:0x0c0f11});
+const IN_SEAT  = new THREE.MeshLambertMaterial({map: grainTex('#2a2622', 22)});
 const IN_METAL = new THREE.MeshPhongMaterial({color:0x6e767d, shininess:90});
 
 function ibox(w,h,d,mat,px,py,pz,rx){
@@ -1023,52 +1092,56 @@ function ibox(w,h,d,mat,px,py,pz,rx){
   m.position.set(px,py,pz); if(rx) m.rotation.x = rx;
   cockpit.add(m); return m;
 }
-const PZ = -1.72;                                  // ana pano yüzeyi
-ibox(2.40,0.56,0.07, IN_PANEL, 0, 0.63, PZ);       // ana pano
-ibox(2.40,0.07,0.44, IN_DARK,  0, 0.945, PZ+0.21, 0.13);  // güneşlik
-ibox(2.40,0.30,0.10, IN_TRIM,  0, 0.24, PZ+0.02);  // pano altı
-ibox(2.20,0.06,2.20, IN_TRIM,  0, 0.06, -0.62);    // taban
-ibox(2.20,0.06,1.30, IN_TRIM,  0, 1.66, -0.42);    // tavan
-ibox(2.20,0.90,0.06, IN_TRIM,  0, 0.85, 0.46);     // arka bölme
-for(const s of [-1,1]){
-  ibox(0.06,0.86,2.10, IN_TRIM, s*0.95, 0.49, -0.60);      // yan duvar (pencere eşiği 0.92)
-  ibox(0.06,0.16,2.10, IN_TRIM, s*0.95, 1.58, -0.60);      // pencere üstü
-  ibox(0.07,0.60,0.12, IN_TRIM, s*0.95, 1.24, 0.38);       // arka direk
-  ibox(0.09,0.66,0.10, IN_DARK, s*0.93, 1.26, -1.40);      // ön direk
-  ibox(0.08,0.62,0.09, IN_DARK, s*0.34, 1.28, -1.36, 0.20);// cam ayırıcı
-}
-ibox(2.30,0.09,0.16, IN_DARK, 0, 1.62, -1.28, 0.20);       // cam üst kirişi
-ibox(0.34,0.34,0.20, IN_DARK, 0, 1.34, -1.30);             // tepe panel gövdesi
+const PZ = -2.05;                                   // ana pano yüzeyi (göze 1.41 m)
 
-/* koltuklar */
+/* --- pano ve güneşlik --- */
+ibox(2.30,0.46,0.07, IN_PANEL, 0, 0.76, PZ);              // ana pano  y 0.53..0.99
+ibox(2.30,0.30,0.10, IN_TRIM,  0, 0.38, PZ+0.02);         // pano altı
+ibox(2.30,0.07,0.50, IN_DARK,  0, 0.985, PZ+0.24, -0.10); // güneşlik rafı (ön kenar -12°)
+
+/* --- kabuk --- */
+ibox(2.34,0.06,2.60, IN_TRIM,  0, 0.10, -0.85);           // taban
+ibox(2.34,0.06,2.10, IN_TRIM,  0, 1.82, -0.55);           // tavan
+ibox(2.34,0.80,0.06, IN_TRIM,  0, 1.40, 0.52);            // arka bölme
+for(const s of [-1,1]){
+  ibox(0.06,1.00,2.40, IN_TRIM, s*1.12, 0.60, -0.82);     // yan duvar (eşik 1.10)
+  ibox(0.06,0.18,2.40, IN_TRIM, s*1.12, 1.75, -0.82);     // pencere üstü
+  ibox(0.07,0.56,0.12, IN_TRIM, s*1.12, 1.40, 0.32);      // arka direk
+  ibox(0.07,0.56,0.10, IN_DARK, s*1.10, 1.40, -1.62);     // ön yan direk
+}
+ibox(0.055,0.56,0.09, IN_DARK, -0.02, 1.41, -1.86, 0.20); // orta direk (pilotun sağında)
+ibox(2.34,0.10,0.16, IN_DARK, 0, 1.71, -1.62, 0.20);      // cam üst kirişi
+ibox(1.10,0.24,0.40, IN_DARK, 0, 1.70, -1.10);            // tepe panel
+
+/* --- koltuklar --- */
 for(const s of [-1,1]){
   const g = new THREE.Group();
-  const pan = new THREE.Mesh(new THREE.BoxGeometry(0.54,0.10,0.54), IN_SEAT);
-  pan.position.set(0,0.42,-0.24);
-  const bk = new THREE.Mesh(new THREE.BoxGeometry(0.54,0.66,0.11), IN_SEAT);
-  bk.position.set(0,0.76,0.06); bk.rotation.x = 0.13;
-  const hr = new THREE.Mesh(new THREE.BoxGeometry(0.36,0.22,0.11), IN_SEAT);
-  hr.position.set(0,1.13,0.11);
-  g.add(pan,bk,hr); g.position.set(s*0.50,0,-0.08); cockpit.add(g);
+  const pan = new THREE.Mesh(new THREE.BoxGeometry(0.56,0.10,0.56), IN_SEAT);
+  pan.position.set(0,0.60,-0.20);
+  const bk = new THREE.Mesh(new THREE.BoxGeometry(0.56,0.70,0.12), IN_SEAT);
+  bk.position.set(0,0.96,0.16); bk.rotation.x = 0.13;
+  const hr = new THREE.Mesh(new THREE.BoxGeometry(0.38,0.24,0.12), IN_SEAT);
+  hr.position.set(0,1.38,0.22);
+  g.add(pan,bk,hr); g.position.set(s*0.48,0,0.02); cockpit.add(g);
 }
 
-/* göstergeler */
+/* --- göstergeler: üst sıra -15°, alt sıra -23° --- */
 const G = {};
 const GAUGES = [
-  ['asi',-0.668,0.800,0.075], ['ai',-0.500,0.800,0.075], ['alt',-0.332,0.800,0.075],
-  ['tc', -0.668,0.635,0.075], ['hi',-0.500,0.635,0.075], ['vsi',-0.332,0.635,0.075],
-  ['n1',  0.000,0.800,0.070], ['eng', 0.000,0.635,0.070]
+  ['asi',-0.680,0.860,0.090], ['ai',-0.480,0.860,0.090], ['alt',-0.280,0.860,0.090],
+  ['tc', -0.680,0.660,0.090], ['hi',-0.480,0.660,0.090], ['vsi',-0.280,0.660,0.090],
+  ['n1',  0.010,0.855,0.082], ['eng', 0.010,0.660,0.082]
 ];
 for(const [k,gx,gy,r] of GAUGES){
   const o = inst(); G[k]=o;
   const m = new THREE.Mesh(new THREE.CircleGeometry(r,44), new THREE.MeshBasicMaterial({map:o.t}));
   m.position.set(gx,gy,PZ+0.036); cockpit.add(m);
-  const bez = new THREE.Mesh(new THREE.RingGeometry(r,r+0.013,44),
+  const bez = new THREE.Mesh(new THREE.RingGeometry(r,r+0.014,44),
     new THREE.MeshLambertMaterial({color:0x08090b}));
   bez.position.set(gx,gy,PZ+0.038); cockpit.add(bez);
 }
 
-/* CDU / radyo yığını */
+/* --- CDU / radyo --- */
 const radio = inst();
 (function(){
   const x = radio.x, W=GD, H=GD;
@@ -1089,110 +1162,125 @@ const radio = inst();
     x.fillStyle='#39424a'; x.beginPath(); x.arc(W-40,y+hh*0.5,16,0,7); x.fill();
   }
   radio.t.needsUpdate = true;
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.32,0.44),
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.30,0.40),
     new THREE.MeshBasicMaterial({map:radio.t}));
-  m.position.set(0.24,0.66,PZ+0.036); cockpit.add(m);
+  m.position.set(0.32,0.76,PZ+0.036); cockpit.add(m);
 })();
 
-/* künye */
+/* --- yardımcı pilot paneli (dolgu) --- */
+(function(){
+  const c = cv(512,256), x = c.getContext('2d');
+  x.fillStyle='#0b0e11'; x.fillRect(0,0,512,256);
+  for(let i=0;i<3;i++) for(let j=0;j<2;j++){
+    x.fillStyle='#151a1f'; x.fillRect(18+i*166, 16+j*118, 148, 100);
+    x.strokeStyle='#283037'; x.lineWidth=3; x.strokeRect(18+i*166, 16+j*118, 148, 100);
+    x.fillStyle='#6fe3a8'; x.font='bold 22px ui-monospace, monospace';
+    x.textAlign='center'; x.textBaseline='middle';
+    x.fillText(['ALT','SPD','HDG','V/S','CRS','QNH'][i+j*3], 92+i*166, 50+j*118);
+    x.fillStyle='#ffb020'; x.font='26px ui-monospace, monospace';
+    x.fillText(['24000','280','360','+1200','341','1013'][i+j*3], 92+i*166, 88+j*118);
+  }
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.56,0.28),
+    new THREE.MeshBasicMaterial({map:tex(c)}));
+  m.position.set(0.72,0.76,PZ+0.036); cockpit.add(m);
+})();
+
+/* --- künye --- */
 (function(){
   const c = cv(512,128), x = c.getContext('2d');
   x.fillStyle='#14181c'; x.fillRect(0,0,512,128);
   x.strokeStyle='#39424a'; x.lineWidth=4; x.strokeRect(6,6,500,116);
   x.fillStyle='#ffb020'; x.font='bold 36px ui-monospace, monospace';
-  x.textAlign='center'; x.textBaseline='middle'; x.fillText('ECOOMEDYA  AIRLINES', 256, 50);
-  x.fillStyle='#7d878e'; x.font='22px ui-monospace, monospace'; x.fillText('TC-ECO  ·  EM-737', 256, 90);
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.36,0.068),
+  x.textAlign='center'; x.textBaseline='middle'; x.fillText('TURKISH  AIRLINES', 256, 50);
+  x.fillStyle='#7d878e'; x.font='22px ui-monospace, monospace'; x.fillText('TC-ECO  ·  A380-800', 256, 90);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.34,0.064),
     new THREE.MeshBasicMaterial({map:tex(c)}));
-  m.position.set(0.78,0.86,PZ+0.036); cockpit.add(m);
+  m.position.set(-0.48,0.962,PZ+0.037); cockpit.add(m);
 })();
 
-/* ikaz lambaları */
+/* --- ikaz lambaları (güneşliğin altında) --- */
 function lamp(px,py,col){
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.062,0.028),
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.066,0.030),
     new THREE.MeshBasicMaterial({color:0x141a1e}));
   m.position.set(px,py,PZ+0.036); m.userData.col = new THREE.Color(col);
   cockpit.add(m); return m;
 }
-const L_STALL = lamp(0.70,0.760,0xff3a24);
-const L_GEAR  = lamp(0.70,0.722,0x2ef07a);
-const L_FLAP  = lamp(0.70,0.684,0xffb020);
-const L_FUEL  = lamp(0.70,0.646,0xff8a1a);
-const L_BRK   = lamp(0.70,0.608,0xff3a24);
+const L_STALL = lamp(-0.90,0.93,0xff3a24);
+const L_GEAR  = lamp(-0.90,0.89,0x2ef07a);
+const L_FLAP  = lamp(-0.90,0.85,0xffb020);
+const L_FUEL  = lamp(-0.90,0.81,0xff8a1a);
+const L_BRK   = lamp(-0.90,0.77,0xff3a24);
 
-/* kumanda kolonu */
-const yoke = new THREE.Group(); yoke.position.set(-0.50,0.66,-1.56); cockpit.add(yoke);
+/* --- kumanda kolonu --- */
+const yoke = new THREE.Group(); yoke.position.set(-0.48,0.30,-1.58); cockpit.add(yoke);
 (function(){
-  const col = new THREE.Mesh(new THREE.CylinderGeometry(0.032,0.032,0.46,10), IN_METAL);
-  col.rotation.x = Math.PI/2 - 0.30; col.position.set(0,-0.06,0.20); yoke.add(col);
-  const hb = new THREE.Mesh(new THREE.BoxGeometry(0.13,0.12,0.06), IN_DARK);
-  hb.position.set(0,-0.11,0.42); yoke.add(hb);
-  const bar = new THREE.Mesh(new THREE.BoxGeometry(0.44,0.036,0.045), IN_DARK);
-  bar.position.set(0,-0.11,0.42); yoke.add(bar);
+  const col = new THREE.Mesh(new THREE.CylinderGeometry(0.036,0.036,0.44,10), IN_METAL);
+  col.rotation.x = -0.24; col.position.set(0,0.20,0.03); yoke.add(col);
+  const hb = new THREE.Mesh(new THREE.BoxGeometry(0.15,0.13,0.07), IN_DARK);
+  hb.position.set(0,0.42,0.08); yoke.add(hb);
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(0.46,0.040,0.05), IN_DARK);
+  bar.position.set(0,0.42,0.08); yoke.add(bar);
   for(const s of [-1,1]){
-    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.030,0.030,0.13,8), IN_DARK);
-    grip.rotation.z = Math.PI/2; grip.position.set(s*0.19,-0.11,0.42); yoke.add(grip);
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.034,0.11,0.034), IN_DARK);
-    arm.position.set(s*0.11,-0.06,0.42); yoke.add(arm);
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.032,0.032,0.14,8), IN_DARK);
+    grip.rotation.z = Math.PI/2; grip.position.set(s*0.20,0.42,0.08); yoke.add(grip);
   }
 })();
 
-/* orta konsol + itki kolları */
-ibox(0.42,0.44,0.70, IN_PANEL, 0.0, 0.26, -1.18);
+/* --- orta konsol + itki kolları --- */
+ibox(0.50,0.34,0.90, IN_PANEL, 0.0, 0.30, -1.10);
 const levThr = new THREE.Group(), levThr2 = new THREE.Group(), levSpd = new THREE.Group();
-[[levThr,-0.07,0x16191c],[levThr2,0.00,0x16191c],[levSpd,0.10,0x9a2418]].forEach(([g,ox,col])=>{
-  g.position.set(ox,0.48,-1.30); cockpit.add(g);
-  const st = new THREE.Mesh(new THREE.BoxGeometry(0.022,0.032,0.26), IN_METAL);
-  st.position.z = -0.12; g.add(st);
-  const kn = new THREE.Mesh(new THREE.SphereGeometry(0.034,10,8),
+[[levThr,-0.08,0x16191c],[levThr2,0.00,0x16191c],[levSpd,0.11,0x9a2418]].forEach(([g,ox,col])=>{
+  g.position.set(ox,0.48,-1.22); cockpit.add(g);
+  const st = new THREE.Mesh(new THREE.BoxGeometry(0.024,0.034,0.28), IN_METAL);
+  st.position.z = -0.13; g.add(st);
+  const kn = new THREE.Mesh(new THREE.SphereGeometry(0.036,10,8),
     new THREE.MeshPhongMaterial({color:col, shininess:70}));
-  kn.position.z = -0.25; g.add(kn);
+  kn.position.z = -0.27; g.add(kn);
 });
-/* flap kolu */
-const levFlap = new THREE.Group(); levFlap.position.set(0.19,0.48,-1.24); cockpit.add(levFlap);
+const levFlap = new THREE.Group(); levFlap.position.set(0.22,0.48,-1.16); cockpit.add(levFlap);
 (function(){
-  const st = new THREE.Mesh(new THREE.BoxGeometry(0.02,0.028,0.22), IN_METAL);
-  st.position.z=-0.10; levFlap.add(st);
-  const kn = new THREE.Mesh(new THREE.BoxGeometry(0.06,0.05,0.05), IN_DARK);
-  kn.position.z=-0.21; levFlap.add(kn);
+  const st = new THREE.Mesh(new THREE.BoxGeometry(0.022,0.030,0.24), IN_METAL);
+  st.position.z=-0.11; levFlap.add(st);
+  const kn = new THREE.Mesh(new THREE.BoxGeometry(0.065,0.055,0.055), IN_DARK);
+  kn.position.z=-0.23; levFlap.add(kn);
 })();
 
-/* pedallar */
+/* --- pedallar --- */
 const pedL = new THREE.Group(), pedR = new THREE.Group();
 for(const [g,s] of [[pedL,-1],[pedR,1]]){
-  const p = new THREE.Mesh(new THREE.BoxGeometry(0.12,0.16,0.03), IN_DARK);
-  p.position.set(-0.50+s*0.13, 0.20, -1.58); g.add(p); cockpit.add(g);
+  const p = new THREE.Mesh(new THREE.BoxGeometry(0.13,0.17,0.03), IN_DARK);
+  p.position.set(-0.48+s*0.15, 0.22, -1.80); g.add(p); cockpit.add(g);
 }
 
-/* iç aydınlatma */
-const cabinLight = new THREE.PointLight(0xfff0dd, 0.6, 5.5);
-cabinLight.position.set(0, CKY+1.25, CKZ-0.55); plane.add(cabinLight);
+/* --- iç aydınlatma --- */
+const cabinLight = new THREE.PointLight(0xfff0dd, 0.7, 7.0);
+cabinLight.position.set(0, CKY+1.55, CKZ-0.60); plane.add(cabinLight);
 
-/* cam yansıması */
+/* --- cam yansıması --- */
 (function(){
   const c = cv(512,512), x=c.getContext('2d');
   x.strokeStyle='rgba(255,255,255,0.05)'; x.lineWidth=2;
-  for(let i=0;i<80;i++){
+  for(let i=0;i<70;i++){
     x.beginPath(); const sx=Math.random()*512, sy=Math.random()*512;
     x.moveTo(sx,sy); x.lineTo(sx+(Math.random()-0.5)*70, sy+Math.random()*80); x.stroke();
   }
   x.fillStyle='rgba(255,255,255,0.04)';
-  for(let i=0;i<300;i++) x.fillRect(Math.random()*512,Math.random()*512,2,2);
-  const gm = new THREE.MeshBasicMaterial({map:tex(c), transparent:true, opacity:0.22,
+  for(let i=0;i<260;i++) x.fillRect(Math.random()*512,Math.random()*512,2,2);
+  const gm = new THREE.MeshBasicMaterial({map:tex(c), transparent:true, opacity:0.18,
     depthWrite:false, side:THREE.DoubleSide, blending:THREE.AdditiveBlending});
-  const w = new THREE.Mesh(new THREE.PlaneGeometry(1.5,0.66), gm);
-  w.position.set(-0.02,1.30,-1.34); w.rotation.x = -0.30; w.renderOrder = 3;
+  const w = new THREE.Mesh(new THREE.PlaneGeometry(1.8,0.60), gm);
+  w.position.set(-0.02,1.36,-1.80); w.rotation.x = -0.20; w.renderOrder = 3;
   cockpit.add(w);
 })();
 
-/* kafa (bakış) */
+/* --- kafa (bakış) --- */
 const head = new THREE.Group(); head.position.copy(EYE); head.rotation.order='YXZ'; plane.add(head);
 
 /* =========================================================================
    UÇUŞ MODELİ — dar gövde jet
    ========================================================================= */
-const MASS=62000, SREF=125, CL0=0.18, CLA=5.0, CD0=0.021, KIND=0.043;
-const STALL_A = DEG(15), MAXT = 170000, GRAV = 9.81;
+const MASS=480000, SREF=845, CL0=0.20, CLA=4.8, CD0=0.020, KIND=0.045;
+const STALL_A = DEG(15), MAXT = 1080000, GRAV = 9.81;
 const FLAP_SET = [0,5,15,25,30,40];
 
 const F = {
@@ -1235,12 +1323,12 @@ function physics(dt){
     if(F.starting<=0){ F.eng = true; toast('MOTORLAR ÇALIŞIYOR'); }
   } else if(F.eng){
     if(F.fuel<=0){ F.eng=false; toast('YAKIT BİTTİ'); }
-    F.n1 = damp(F.n1, 22 + F.thr*78, 0.85, dt);      // jet tepkisi yavaştır
+    F.n1 = damp(F.n1, 21 + F.thr*79, 0.62, dt);      // dev turbofanlar daha da yavaş
   } else {
     F.n1 = damp(F.n1, 0, 0.45, dt);
   }
   const power = F.eng ? clamp((F.n1-22)/78, 0, 1.05) : 0;
-  if(F.eng) F.fuel = clamp(F.fuel - (0.05+power*0.95)*0.000085*dt, 0, 1);
+  if(F.eng) F.fuel = clamp(F.fuel - (0.05+power*0.95)*0.000062*dt, 0, 1);
   F.oil = damp(F.oil, F.eng ? 0.40+power*0.36 : 0.14, 0.10, dt);
   F.egt = damp(F.egt, F.eng ? 0.22+power*0.62 : 0.04, 0.30, dt);
 
@@ -1278,16 +1366,16 @@ function physics(dt){
   F.gLoad = damp(F.gLoad, V>6 ? clamp(qd*SREF*cl/(MASS*GRAV),-3,6) : 1, 8, dt);
 
   /* --- açısal (büyük uçak = ağır tepki) --- */
-  const auth = clamp((V*V)/(115*115), 0.04, 1.9);
+  const auth = clamp((V*V)/(145*145), 0.04, 1.8);
   if(Math.abs(F.pitchIn) < 0.06 && !F.ground)
-    F.trimA = clamp(damp(F.trimA, F.aoa, 0.40, dt), -0.11, 0.17);
-  const tp =  F.pitchIn*0.42*auth - (F.aoa-F.trimA)*1.30*auth - F.om.x*0.35;
-  const ty =  F.yawIn*0.22*auth   - F.slip*1.10*auth;
-  const tr =  F.rollIn*0.72*auth  + F.slip*0.40*auth;
+    F.trimA = clamp(damp(F.trimA, F.aoa, 0.32, dt), -0.10, 0.17);
+  const tp =  F.pitchIn*0.30*auth - (F.aoa-F.trimA)*1.15*auth - F.om.x*0.40;
+  const ty =  F.yawIn*0.16*auth   - F.slip*0.95*auth;
+  const tr =  F.rollIn*0.50*auth  + F.slip*0.35*auth;
   if(!F.ground){
-    F.om.x = damp(F.om.x, tp*(1-over*0.5), 1.7, dt);
-    F.om.y = damp(F.om.y, ty, 1.3, dt);
-    F.om.z = damp(F.om.z, tr*(1-over*0.5), 2.2, dt);
+    F.om.x = damp(F.om.x, tp*(1-over*0.5), 1.1, dt);
+    F.om.y = damp(F.om.y, ty, 0.9, dt);
+    F.om.z = damp(F.om.z, tr*(1-over*0.5), 1.4, dt);
     _e.set(F.om.x*dt, F.om.y*dt, F.om.z*dt, 'XYZ');
     q.multiply(_q.setFromEuler(_e)).normalize();
   }
@@ -1298,33 +1386,38 @@ function physics(dt){
 
   /* --- zemin --- */
   const gh = terrainH(F.pos.x, F.pos.z);
-  const wheelBottom = F.pos.y - GEAR_H*F.gearPos - (1-F.gearPos)*1.05;
+  const pit0 = getEuler().x;
+  const legH = GEAR_H*F.gearPos + (1-F.gearPos)*4.30;
+  // temas noktası ana takımlar: burun kalkarken uçak tekerlek etrafında döner
+  const wheelBottom = F.pos.y - legH*Math.cos(pit0) - MAIN_Z*Math.sin(Math.max(pit0,0));
   const overWater = gh < SEA+0.4;
   if(wheelBottom <= gh){
     if(!F.ground && F.vel.y < -0.6){
       const vy = F.vel.y, hs = Math.hypot(F.vel.x,F.vel.z);
       const bank = Math.abs(RAD(getEuler().z));
-      if(!F.gearDown || overWater || vy < -5.5 || bank > 12 ||
+      if(!F.gearDown || overWater || vy < -5.0 || bank > 8 ||
          (Math.abs(gh-FIELD_ELEV)>0.8 && hs>40)){
         crash(!F.gearDown ? 'İNİŞ TAKIMI KAPALI' : overWater ? 'SUYA İNİŞ' :
-              vy<-5.5 ? 'SERT İNİŞ' : bank>12 ? 'KANAT ÇARPMASI' : 'PİST DIŞI');
+              vy<-5.0 ? 'SERT İNİŞ' : bank>8 ? 'KANAT ÇARPMASI' : 'PİST DIŞI');
       } else {
         toast(vy<-2.0 ? 'SERT AMA SAĞLAM İNİŞ · '+Math.round(-vy*197)+' FPM'
                       : 'YUMUŞAK İNİŞ · '+Math.round(-vy*197)+' FPM');
       }
     }
     F.ground = true;
-    F.pos.y = gh + GEAR_H*F.gearPos;
     if(F.vel.y<0) F.vel.y = 0;
 
     const e = getEuler();
     const hs = Math.hypot(F.vel.x,F.vel.z);
-    const rotAuth = clamp((hs-45)/22,0,1);
-    const gp = clamp(F.pitchIn*DEG(12)*rotAuth, DEG(-1.0), DEG(12));
-    _e.set(damp(e.x, gp, 2.2, dt),
-           e.y + F.yawIn*clamp(hs/45,0,1)*0.20*dt*(hs>0.5?1:0),
-           damp(e.z, 0, 5, dt), 'YXZ');
+    const rotAuth = clamp((hs-58)/26,0,1);
+    const gp = clamp(F.pitchIn*DEG(12)*rotAuth, DEG(-0.8), DEG(12));
+    const pit = damp(e.x, gp, 1.6, dt);
+    _e.set(pit,
+           e.y + F.yawIn*clamp(hs/55,0,1)*0.12*dt*(hs>0.5?1:0),
+           damp(e.z, 0, 3.5, dt), 'YXZ');
     q.setFromEuler(_e);
+    // gövde, ana tekerlekler piste değecek şekilde oturtulur
+    F.pos.y = gh + Math.max(legH,4.30)*Math.cos(pit) + MAIN_Z*Math.sin(Math.max(pit,0));
 
     // yuvarlanma sürtünmesi (sabit yavaşlama) + fren
     const mu = F.brake ? 0.38 : 0.018;
@@ -1337,11 +1430,11 @@ function physics(dt){
     _vl.x *= Math.exp(-5*dt);
     F.vel.copy(_vl).applyQuaternion(q);
     F.om.set(0,0,0);
-  } else if(F.pos.y - gh > GEAR_H*F.gearPos + 0.05){
+  } else if(F.pos.y - gh > legH*Math.cos(pit0) + MAIN_Z*Math.sin(Math.max(pit0,0)) + 0.06){
     F.ground = false;
   }
 
-  const rough = F.ground ? clamp(Math.hypot(F.vel.x,F.vel.z)/90,0,1)*0.5 : 0;
+  const rough = F.ground ? clamp(Math.hypot(F.vel.x,F.vel.z)/110,0,1)*0.45 : 0;
   F.buffet = damp(F.buffet, over*1.0 + rough, 8, dt);
 }
 
@@ -1503,10 +1596,18 @@ function readInput(dt){
 function setView(){
   cockpit.visible = (view===0);
   extGlass.visible = (view!==0);
-  camera.fov = view===0 ? 72 : 56; camera.updateProjectionMatrix();
+  applyFov();
   if(view===0){ head.add(camera); camera.position.set(0,0,0); camera.rotation.set(0,0,0); }
   else { scene.add(camera); }
   cView.querySelector('.v').textContent = VIEWS[view];
+}
+function applyFov(){
+  const vBase = view===0 ? 58 : 52;          // dikey görüş açısı
+  const hMax  = view===0 ? 104 : 100;        // ultra geniş ekranlarda yatay sınır
+  let v = vBase;
+  const h = 2*RAD(Math.atan(Math.tan(DEG(v/2))*camera.aspect));
+  if(h > hMax) v = 2*RAD(Math.atan(Math.tan(DEG(hMax/2))/camera.aspect));
+  camera.fov = v; camera.updateProjectionMatrix();
 }
 const camPos = new THREE.Vector3(), camAim = new THREE.Vector3();
 function updateCamera(dt){
@@ -1518,19 +1619,19 @@ function updateCamera(dt){
     head.position.set(EYE.x, EYE.y + (Math.random()-0.5)*b*0.1, EYE.z);
   } else if(view===1){
     const e = getEuler();
-    _tmp.set(0, 11, 62).applyAxisAngle(_UPV, e.y);
+    _tmp.set(0, 26, 158).applyAxisAngle(_UPV, e.y);
     camPos.copy(F.pos).add(_tmp);
-    const ghc = terrainH(camPos.x,camPos.z)+6;
+    const ghc = terrainH(camPos.x,camPos.z)+14;
     camPos.y = Math.max(camPos.y, ghc);
     camera.position.lerp(camPos, 1-Math.exp(-6*dt));
-    camAim.copy(F.pos).addScaledVector(_fwd, 22); camAim.y += 3.0;
+    camAim.copy(F.pos).addScaledVector(_fwd, 55); camAim.y += 6.0;
     camera.lookAt(camAim);
   } else {
     orbit += dt*0.14;
-    camPos.set(Math.cos(orbit)*68, 20, Math.sin(orbit)*68).add(F.pos);
-    camPos.y = Math.max(camPos.y, terrainH(camPos.x,camPos.z)+6);
+    camPos.set(Math.cos(orbit)*170, 48, Math.sin(orbit)*170).add(F.pos);
+    camPos.y = Math.max(camPos.y, terrainH(camPos.x,camPos.z)+14);
     camera.position.lerp(camPos, 1-Math.exp(-4*dt));
-    camera.lookAt(F.pos.x, F.pos.y+1.6, F.pos.z);
+    camera.lookAt(F.pos.x, F.pos.y+3.0, F.pos.z);
   }
 }
 
@@ -1593,14 +1694,16 @@ function updateVisuals(dt, kt, ftAlt, fpm, hdg, e, turnRate){
   plane.quaternion.copy(F.quat);
 
   // kumanda yüzeyleri
-  elev.rotation.x = -F.pitchIn*DEG(16);
-  rud.rotation.y  =  F.yawIn*DEG(20);
-  ailL.rotation.x = -F.rollIn*DEG(17);
-  ailR.rotation.x =  F.rollIn*DEG(17);
-  flapL.rotation.x = flapR.rotation.x = DEG(FLAP_SET[F.flap]);
+  elev.rotation.x = -F.pitchIn*DEG(14);
+  rud.rotation.y  =  F.yawIn*DEG(18);
+  ailL.rotation.x = -F.rollIn*DEG(15);
+  ailR.rotation.x =  F.rollIn*DEG(15);
+  const fd = DEG(FLAP_SET[F.flap]);
+  flapL.rotation.x = flapR.rotation.x = fd;
+  flapL2.rotation.x = flapR2.rotation.x = fd*0.8;
 
   // kokpit kolları
-  yoke.position.z = -1.56 + F.pitchIn*0.06;
+  yoke.position.z = -1.58 + F.pitchIn*0.07;
   yoke.rotation.z = -F.rollIn*0.80;
   levThr.rotation.x = levThr2.rotation.x = -F.thr*0.62;
   levSpd.rotation.x = F.brake ? -0.55 : 0;
@@ -1608,21 +1711,22 @@ function updateVisuals(dt, kt, ftAlt, fpm, hdg, e, turnRate){
   pedL.position.z = F.yawIn*0.05; pedR.position.z = -F.yawIn*0.05;
 
   // iniş takımı
-  gearN.rotation.x = (1-F.gearPos)*DEG(88);
-  gearL.rotation.z = (1-F.gearPos)*DEG(88);
-  gearR.rotation.z = -(1-F.gearPos)*DEG(88);
-  const spin = Math.hypot(F.vel.x,F.vel.z)*dt/0.5;
-  if(F.ground) for(const g of [gearN,gearL,gearR])
+  const gr = (1-F.gearPos)*DEG(88);
+  gearN.rotation.x = gr;
+  gearL.rotation.z = gr;  gearR.rotation.z = -gr;
+  gearBL.rotation.x = gr; gearBR.rotation.x = gr;
+  const spin = Math.hypot(F.vel.x,F.vel.z)*dt/0.68;
+  if(F.ground) for(const g of GEARS)
     for(const w of g.userData.wheels) w.rotation.x += spin;
 
   // fanlar
-  const fanSpin = (0.4 + F.n1/100*5.2)*dt;
+  const fanSpin = (0.3 + F.n1/100*3.4)*dt;
   for(const f of fans) f.rotation.z += fanSpin;
 
   // sahne takibi
   sky.position.set(F.pos.x, 0, F.pos.z);
   sea.position.set(F.pos.x, SEA, F.pos.z);
-  sun.position.copy(F.pos).addScaledVector(sunDir, 450);
+  sun.position.copy(F.pos).addScaledVector(sunDir, 700);
   sun.target.position.copy(F.pos); sun.target.updateMatrixWorld();
   updateClouds(F.pos.x, F.pos.z);
   rebuildTerrain(F.pos.x, F.pos.z);
@@ -1715,7 +1819,7 @@ function frame(now){
     F.pos.addScaledVector(F.vel, dt);
     F.n1 = damp(F.n1, 0, 1.2, dt);
     const gh = terrainH(F.pos.x,F.pos.z);
-    if(F.pos.y < gh+1.4) F.pos.y = gh+1.4;
+    if(F.pos.y < gh+4.2) F.pos.y = gh+4.2;
   }
 
   _fwd.set(0,0,-1).applyQuaternion(F.quat);
@@ -1743,7 +1847,7 @@ function frame(now){
 }
 
 addEventListener('resize', ()=>{
-  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  camera.aspect = innerWidth/innerHeight; applyFov();
   renderer.setSize(innerWidth, innerHeight);
   renderer.setPixelRatio(BASE_PR*perf.scale);
 });
