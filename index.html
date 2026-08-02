@@ -51,7 +51,7 @@
   #toast.show{opacity:1}
 
   #help{right:16px; bottom:16px; background:rgba(8,12,16,.74); border:1px solid var(--line);
-    padding:12px 14px; font-size:11px; line-height:1.85; letter-spacing:.05em; max-width:270px}
+    padding:11px 13px; font-size:10.5px; line-height:1.7; letter-spacing:.04em; max-width:264px}
   #help h4{font-size:9px; letter-spacing:.24em; color:var(--amber); margin-bottom:8px; font-weight:600}
   #help b{color:#fff; font-weight:600; display:inline-block; min-width:74px}
   #help.hidden{display:none}
@@ -106,6 +106,8 @@
   <div class="chip" id="cAt"><div class="k">Oto Gaz</div><div class="v">KAPALI</div></div>
   <div class="chip" id="cIls"><div class="k">ILS 36</div><div class="v">—</div></div>
   <div class="chip" id="cSpl"><div class="k">Spoyler</div><div class="v">0%</div></div>
+  <div class="chip" id="cWind"><div class="k">Rüzgâr</div><div class="v">210° 12kt</div></div>
+  <div class="chip" id="cRa"><div class="k">Radyo Alt.</div><div class="v">—</div></div>
 </div>
 
 <div class="hud" id="warn">STALL</div>
@@ -128,6 +130,7 @@
   <b>Boşluk</b> spoyler &nbsp; <b>K</b> yer spoyleri<br>
   <b>Z</b> ters itki (basılı) &nbsp; <b>L</b> farlar<br>
   <b>1</b> otopilot &nbsp; <b>3</b> oto gaz &nbsp; <b>4</b> ILS<br>
+  <b>M</b> rüzgâr koşulu<br>
   <b>8 / 2</b> ses aç / kıs &nbsp; <b>5</b> sessiz<br>
   <b>P</b> grafik kalitesi<br>
   <b>R</b> piste dön &nbsp; <b>H</b> bu paneli gizle
@@ -750,7 +753,9 @@ const flapR  = hinged(wingR,   6.0, 10.13, 11.0, 3.0, M_WING);
 const flapL2 = hinged(wingL, -16.5, 12.56, 10.0, 2.3, M_WING);
 const flapR2 = hinged(wingR,  16.5, 12.56, 10.0, 2.3, M_WING);
 const ailL   = hinged(wingL, -30.0, 15.41,  8.0, 1.4, M_WING, 0.26);
+const FLAPS  = [];
 const ailR   = hinged(wingR,  30.0, 15.41,  8.0, 1.4, M_WING, 0.26);
+for(const f of [flapL,flapR,flapL2,flapR2]){ f.userData.z0 = f.position.z; FLAPS.push(f); }
 
 /* ---------------- 4 motor ---------------- */
 const fans = [], revCowls = [];
@@ -864,6 +869,46 @@ const gearBR = gearLeg(  3.0,  12.60, -3.55, 2.67, 0.68, [-1.8,0,1.8],     1.45)
 const MAIN_Z = 10.9;                       // ana takımların boylamasına konumu
 const GEARS  = [gearN, gearL, gearR, gearBL, gearBR];
 
+/* ---------------- lastik dumanı ---------------- */
+const SMOKE = [];
+(function(){
+  for(let i=0;i<18;i++){
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW, color:0xd7d2cc,
+      transparent:true, opacity:0, depthWrite:false, fog:true}));
+    sp.visible = false; scene.add(sp);
+    SMOKE.push({sp, life:0, vy:0});
+  }
+})();
+function puff(x,y,z,sz){
+  for(const s of SMOKE){
+    if(s.life>0) continue;
+    s.life = 1; s.vy = 1.4+Math.random()*1.8;
+    s.sp.position.set(x+(Math.random()-0.5)*2.5, y, z+(Math.random()-0.5)*3);
+    s.sp.scale.set(sz,sz,1); s.sp.visible = true;
+    s.sp.material.opacity = 0.55;
+    return;
+  }
+}
+function smokeBurst(){
+  const q = plane.quaternion;
+  for(let i=0;i<10;i++){
+    const off = new THREE.Vector3((i%2?1:-1)*5.5, -GEAR_H+0.5, 10.5+ (i%3)*2);
+    off.applyQuaternion(q).add(F.pos);
+    puff(off.x, off.y, off.z, 4+Math.random()*4);
+  }
+}
+function updateSmoke(dt){
+  for(const s of SMOKE){
+    if(s.life<=0) continue;
+    s.life -= dt*0.55;
+    if(s.life<=0){ s.sp.visible=false; continue; }
+    s.sp.position.y += s.vy*dt;
+    const g2 = s.sp.scale.x + dt*9;
+    s.sp.scale.set(g2,g2,1);
+    s.sp.material.opacity = 0.55*s.life;
+  }
+}
+
 /* ---------------- ayrıntılar ---------------- */
 (function(){
   const a = new THREE.Mesh(new THREE.BoxGeometry(0.16,1.30,2.4), M_WINGD);
@@ -876,6 +921,17 @@ const GEARS  = [gearN, gearL, gearR, gearBL, gearBR];
   mkLight(ext,  5.2, -3.55, -0.6, 0xfff4d8, 0.34, 6.5, 'landing');
   mkLight(gearN, 0, -1.10, -0.55, 0xfff4d8, 0.22, 3.4, 'landing');
 })();
+
+/* ---------------- ön kenar slat'ları ---------------- */
+const SLATS = [];
+for(const [g,sgn] of [[wingL,-1],[wingR,1]]){
+  const sl = new THREE.Group();
+  const m = new THREE.Mesh(wingGeo(26.0, 1.9, 1.0, 0.34, 15.5), M_WING);
+  m.scale.x = sgn; sl.add(m);
+  sl.position.set(sgn*10.0, -0.10, -1.84);
+  sl.userData.p0 = sl.position.clone();
+  g.add(sl); SLATS.push(sl);
+}
 
 /* ---------------- spoyler / hava freni ---------------- */
 const SPOILERS = [];
@@ -1026,6 +1082,14 @@ function drawAI(x, pitch, bank, ils){
     dia(gx, GC - clamp(ils.gsd/0.7,-1.05,1.05)*GR*0.60, '#e46bff');
     txt(x,'LOC',GC-GR*0.72,ly,11,'#a98ab8');
     txt(x,'G/S',gx,GC-GR*0.78,11,'#a98ab8');
+  }
+  if(F.agl < 2500 && !F.ground){
+    const ra = F.agl < 100 ? Math.round(F.agl/2)*2 : Math.round(F.agl/10)*10;
+    x.fillStyle='#05070a'; x.fillRect(GC-GR*0.34, GC+GR*0.44, GR*0.68, 30);
+    x.strokeStyle= F.agl<220?'#e0392b':'#4b555c'; x.lineWidth=2.5;
+    x.strokeRect(GC-GR*0.34, GC+GR*0.44, GR*0.68, 30);
+    txt(x, String(ra), GC, GC+GR*0.44+15, 21, F.agl<220?'#ff6a52':'#6fe3a8', true);
+    txt(x, 'RA', GC-GR*0.44, GC+GR*0.44+15, 11, '#7d878e');
   }
   txt(x,'ATTITUDE',GC,GC*1.66,12,'#7d878e');
   glass(x);
@@ -1384,12 +1448,12 @@ const F = {
   spoilerCmd:0, spoiler:0, spArmed:false, revCmd:false, rev:0,
   comp:GEAR_STATIC, compV:0, lts:{land:false, strobe:false},
   fuel:1, oil:0.2, egt:0.1,
-  ground:true, crashed:false, aoa:0, slip:0, gLoad:1, stall:0, buffet:0, trimA:0.02,
+  ground:true, crashed:false, aoa:0, slip:0, gLoad:1, stall:0, buffet:0, trimA:0.02, tas:0, agl:0,
   pitchIn:0, rollIn:0, yawIn:0
 };
 const _fwd=new THREE.Vector3(), _up=new THREE.Vector3(), _rt=new THREE.Vector3(),
       _vl=new THREE.Vector3(), _e=new THREE.Euler(), _q=new THREE.Quaternion(),
-      _f=new THREE.Vector3(), _tmp=new THREE.Vector3(), _ld=new THREE.Vector3(),
+      _f=new THREE.Vector3(), _tmp=new THREE.Vector3(), _ld=new THREE.Vector3(), _air=new THREE.Vector3(),
       _UPV=new THREE.Vector3(0,1,0);
 
 function resetPlane(){
@@ -1403,6 +1467,7 @@ function resetPlane(){
   AP.on=false; AP.at=false; AP.appr=false;
   F.ground=true; F.crashed=false; F.fuel=1; F.oil=0.2; F.egt=0.1;
   F.pitchIn=F.rollIn=F.yawIn=0; F.buffet=0; F.trimA=0.02;
+  resetCallouts();
   look.set(0,0); lookT.set(0,0);
   toast('PİST BAŞINA DÖNÜLDÜ · RWY 36');
 }
@@ -1433,25 +1498,31 @@ function physics(dt){
   /* --- hava --- */
   const alt = F.pos.y;
   const rho = 1.225*Math.exp(-Math.max(alt,0)/8600);
-  const V = F.vel.length();
+  const turbI = updateWind(dt, alt);
+  _air.copy(F.vel).sub(WIND.v);                       // gövdeye çarpan hava
+  const V = _air.length();
+  F.tas = V;
   const ve = V*Math.sqrt(rho/1.225);                  // eşdeğer hava hızı
-  _vl.copy(F.vel).applyQuaternion(_q.copy(q).conjugate());
+  _vl.copy(_air).applyQuaternion(_q.copy(q).conjugate());
   const vf = Math.max(-_vl.z, 0.001);
   F.aoa  = V>2 ? Math.atan2(-_vl.y, vf) : 0;
   F.slip = V>2 ? Math.atan2(_vl.x, vf) : 0;
 
   const flapDeg = FLAP_SET[F.flap];
-  let cl = CL0 + CLA*F.aoa + flapDeg*0.020;
+  // yer etkisi: kanat açıklığının yarısından alçakta taşıma artar, indüklenen direnç düşer
+  const aglm = Math.max(F.pos.y - terrainH(F.pos.x,F.pos.z), 0);
+  const ge = clamp(1 - aglm/40, 0, 1);
+  let cl = (CL0 + CLA*F.aoa + flapDeg*0.020) * (1 + 0.13*ge);
   const over = smoothstep(STALL_A, STALL_A+DEG(8), Math.abs(F.aoa));
   F.stall = over;
   cl *= (1 - 0.78*over) * (1 - 0.38*F.spoiler);
-  const cd = CD0 + KIND*cl*cl + over*0.10 + flapDeg*0.0016 + F.gearPos*0.016 + F.spoiler*0.075
+  const cd = CD0 + KIND*(1-0.45*ge)*cl*cl + over*0.10 + flapDeg*0.0016 + F.gearPos*0.016 + F.spoiler*0.075
              + 0.085*smoothstep(168, 215, ve);        // yüksek hız direnç artışı
   const qd = 0.5*rho*V*V;
 
   _f.set(0,0,0);
   if(V>0.4){
-    const vd = _tmp.copy(F.vel).normalize();
+    const vd = _tmp.copy(_air).normalize();
     const ld = _ld.crossVectors(_rt, vd).normalize();
     _f.addScaledVector(ld, qd*SREF*cl);
     _f.addScaledVector(vd, -qd*SREF*cd);
@@ -1502,6 +1573,7 @@ function physics(dt){
                       : 'YUMUŞAK İNİŞ · '+Math.round(-vy*197)+' FPM');
       }
       F.compV = Math.min(-vy*1.15, 6);      // tekerlek darbesi
+      if(hs > 30) smokeBurst();
     }
     F.ground = true;
     if(F.vel.y<0) F.vel.y = 0;
@@ -1549,7 +1621,7 @@ function physics(dt){
   F.rev = damp(F.rev, (F.revCmd && revOk) ? 1 : 0, 2.4, dt);
 
   const rough = F.ground ? clamp(Math.hypot(F.vel.x,F.vel.z)/110,0,1)*0.45 : 0;
-  F.buffet = damp(F.buffet, over*1.0 + rough, 8, dt);
+  F.buffet = damp(F.buffet, over*1.0 + rough + (F.ground?0:turbI*0.55), 8, dt);
 }
 
 function crash(reason){
@@ -1557,6 +1629,37 @@ function crash(reason){
   F.crashed = true; F.eng=false; F.thrTgt=0; F.thr=0;
   msg('KAZA', reason+' · R ile piste dön', true);
   sfx.crash();
+}
+
+/* =========================================================================
+   ATMOSFER — rüzgâr, kayma (shear), türbülans
+   ========================================================================= */
+const WIND_SETS = [
+  {n:'SAKİN',        dir:240, kt: 3, turb:0.10, gust:0.15},
+  {n:'HAFİF',        dir:210, kt:12, turb:0.35, gust:0.35},
+  {n:'YAN RÜZGÂR',   dir:270, kt:22, turb:0.55, gust:0.55},
+  {n:'FIRTINALI',    dir:195, kt:34, turb:1.00, gust:0.95}
+];
+const WIND = { set:1, t:0, v:new THREE.Vector3(), sfcDir:210, sfcKt:12 };
+function updateWind(dt, alt){
+  const W = WIND_SETS[WIND.set];
+  WIND.t += dt;
+  const agl = Math.max(alt - FIELD_ELEV, 0);
+  const shear = 0.30 + 0.70*clamp(agl/700, 0, 1);            // yüzeye yakın yavaşlar
+  const twist = (1-shear)*22;                                // ve sola döner
+  const dir = DEG(W.dir - twist);
+  const g = 1 + W.gust*0.45*(Math.sin(WIND.t*0.53)+Math.sin(WIND.t*1.31)*0.6);
+  const spd = W.kt*0.5144*shear*g;
+  WIND.v.set(-Math.sin(dir)*spd, 0, Math.cos(dir)*spd);
+  // türbülans: yüzeye ve buluta yakın daha güçlü
+  const ti = W.turb * (0.55 + 0.45*clamp(1 - agl/450, 0, 1)) *
+             (1 + 0.9*clamp(1-Math.abs(alt-1000)/500,0,1));
+  const t = WIND.t;
+  WIND.v.x += ti*2.4*(Math.sin(t*2.13)+Math.sin(t*5.7)*0.5);
+  WIND.v.y += ti*1.9*(Math.sin(t*1.77+1.2)+Math.sin(t*4.3)*0.55);
+  WIND.v.z += ti*2.4*(Math.sin(t*2.61+2.4)+Math.sin(t*6.1)*0.5);
+  WIND.sfcDir = W.dir; WIND.sfcKt = W.kt;
+  return ti;
 }
 
 /* =========================================================================
@@ -1606,6 +1709,54 @@ function autopilot(dt, e, hdg, kt){
   if(AP.at){
     const se = AP.spd - kt;
     F.thrTgt = clamp(F.thrTgt + clamp(se,-40,40)*0.0022*dt*60, 0, 1);
+  }
+}
+
+/* =========================================================================
+   ANONSLAR ve GPWS
+   ========================================================================= */
+const VOICE = { ok: ('speechSynthesis' in window), last:0 };
+function say(t, urgent){
+  if(!VOICE.ok || sfx.muted || sfx.vol<=0.01) return;
+  try{
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(t);
+    u.lang='en-US'; u.rate = urgent?1.3:1.06; u.pitch = urgent?0.65:0.85;
+    u.volume = clamp(sfx.vol*1.4, 0, 1);
+    speechSynthesis.speak(u);
+  }catch(e){ VOICE.ok = false; }
+}
+const CALL = { done:{}, raIdx:0, lastAgl:99999, gpwsT:0 };
+const RA_STEPS = [2500,1000,500,400,300,200,100,50,40,30,20,10];
+const RA_WORD  = {2500:'twenty five hundred',1000:'one thousand',500:'five hundred',
+                  400:'four hundred',300:'three hundred',200:'two hundred',
+                  100:'one hundred',50:'fifty',40:'forty',30:'thirty',20:'twenty',10:'ten'};
+function resetCallouts(){ CALL.done = {}; CALL.lastAgl = 99999; CALL.gpwsT = 0; }
+function callouts(dt, kt, agl, vs){
+  const d = CALL.done;
+  // --- kalkış ---
+  if(F.ground && !F.crashed){
+    if(kt>80  && !d.k80){ d.k80=1; say('eighty knots'); }
+    if(kt>150 && !d.v1 ){ d.v1 =1; say('V one'); }
+    if(kt>165 && !d.vr ){ d.vr =1; say('rotate'); }
+    if(kt<40){ d.k80=d.v1=d.vr=0; }
+  }
+  // --- radyo altimetre (alçalırken) ---
+  if(!F.ground && agl < 2600 && vs < -60){
+    for(const st of RA_STEPS){
+      if(CALL.lastAgl > st && agl <= st){ say(RA_WORD[st]); break; }
+    }
+    if(CALL.lastAgl > 200 && agl <= 200 && AP.appr) setTimeout(()=>say('minimums'),700);
+    if(CALL.lastAgl > 20 && agl <= 20) setTimeout(()=>say('retard'),350);
+  }
+  CALL.lastAgl = F.ground ? 99999 : agl;
+  // --- GPWS ---
+  CALL.gpwsT -= dt;
+  if(!F.ground && !F.crashed && CALL.gpwsT <= 0 && agl < 2500){
+    if(agl < 700 && vs < -2400)      { say('pull up', true);      CALL.gpwsT = 1.6; }
+    else if(vs < -1900 && agl < 1800){ say('sink rate', true);    CALL.gpwsT = 2.2; }
+    else if(agl < 700 && !F.gearDown){ say('too low, gear', true);CALL.gpwsT = 2.6; }
+    else if(agl < 400 && F.flap < 2) { say('too low, flaps',true);CALL.gpwsT = 3.0; }
   }
 }
 
@@ -1714,6 +1865,9 @@ addEventListener('keydown', e=>{
       hint.style.display = help.classList.contains('hidden')?'block':'none'; break;
     case 'KeyX': lookT.set(0,0); break;
     case 'KeyP': setQuality((perf.level+1)%3, true); break;
+    case 'KeyM':
+      WIND.set = (WIND.set+1)%WIND_SETS.length; sfx.click();
+      toast('RÜZGÂR: '+WIND_SETS[WIND.set].n+' · '+WIND_SETS[WIND.set].dir+'° / '+WIND_SETS[WIND.set].kt+' KT'); break;
     case 'KeyL': F.lts.land = !F.lts.land; sfx.click();
       toast('İNİŞ FARLARI '+(F.lts.land?'AÇIK':'KAPALI')); break;
     case 'Space':
@@ -1834,6 +1988,7 @@ const cThr=document.getElementById('cThr'), cGear=document.getElementById('cGear
       cFps=document.getElementById('cFps'),
       cAp=document.getElementById('cAp'), cAt=document.getElementById('cAt'),
       cIls=document.getElementById('cIls'), cSpl=document.getElementById('cSpl'),
+      cWind=document.getElementById('cWind'), cRa=document.getElementById('cRa'),
       thrFill=document.getElementById('thrFill'),
       warnEl=document.getElementById('warn'), toastEl=document.getElementById('toast'),
       help=document.getElementById('help'), hint=document.getElementById('hint'),
@@ -1865,6 +2020,10 @@ function updateHUD(dt, kt){
   setChip(cAt, AP.at ? AP.spd+' kt' : 'KAPALI', AP.at?'on':'');
   setChip(cSpl, F.rev>0.05 ? 'TERS İTKİ' : Math.round(F.spoiler*100)+'%',
           F.rev>0.05?'bad':(F.spoiler>0.05?'hot':(F.spArmed?'on':'')));
+  setChip(cWind, WIND_SETS[WIND.set].dir+'° '+WIND_SETS[WIND.set].kt+'kt',
+          WIND_SETS[WIND.set].kt>25?'bad':(WIND_SETS[WIND.set].kt>15?'hot':''));
+  setChip(cRa, (F.ground||F.agl>2500) ? '—' : Math.round(F.agl)+' ft',
+          (!F.ground && F.agl<220) ? 'hot' : '');
   const _ils = ilsData();
   setChip(cIls, !AP.appr ? '—' : (_ils && _ils.live
         ? (Math.round(_ils.d/185.2)/10)+' NM · '+(_ils.gsd>0?'+':'')+_ils.gsd.toFixed(1)+'°'
@@ -1899,9 +2058,19 @@ function updateVisuals(dt, kt, ftAlt, fpm, hdg, e, turnRate){
   rud.rotation.y  =  F.yawIn*DEG(18);
   ailL.rotation.x = -F.rollIn*DEG(15);
   ailR.rotation.x =  F.rollIn*DEG(15);
+  const ffrac = F.flap/(FLAP_SET.length-1);
   const fd = DEG(FLAP_SET[F.flap]);
   flapL.rotation.x = flapR.rotation.x = fd;
   flapL2.rotation.x = flapR2.rotation.x = fd*0.8;
+  for(const f of FLAPS){                       // Fowler: geriye kayarak açılır
+    f.position.z = f.userData.z0 + ffrac*1.7;
+    f.position.y = -ffrac*0.30;
+  }
+  for(const sl of SLATS){                      // slat: öne ve aşağı çıkar
+    sl.position.z = sl.userData.p0.z - ffrac*1.15;
+    sl.position.y = sl.userData.p0.y - ffrac*0.42;
+    sl.rotation.x = ffrac*DEG(17);
+  }
 
   // kokpit kolları
   yoke.position.z = -1.58 + F.pitchIn*0.07;
@@ -1954,7 +2123,8 @@ function updateVisuals(dt, kt, ftAlt, fpm, hdg, e, turnRate){
   sun.target.position.copy(F.pos); sun.target.updateMatrixWorld();
   updateClouds(F.pos.x, F.pos.z);
   rebuildTerrain(F.pos.x, F.pos.z);
-  sock.rotation.y = Math.sin(performance.now()*0.0004)*0.5 + 0.7;
+  sock.rotation.y = Math.atan2(-WIND.v.z, WIND.v.x);
+  updateSmoke(dt);
 
   // suni ufuk 30 Hz, diğerleri kare kare sırayla → doku yüklemesi dağıtılır
   gaugeAcc += dt;
@@ -2052,8 +2222,9 @@ function frame(now){
 
   _fwd.set(0,0,-1).applyQuaternion(F.quat);
   const e = getEuler();
-  const V = F.vel.length();
+  const V = F.crashed ? F.vel.length() : F.tas;
   const kt = V*1.94384;
+  F.agl = (F.pos.y - terrainH(F.pos.x, F.pos.z))*3.28084;
   const ftAlt = F.pos.y*3.28084;
   const fpm = F.vel.y*196.85;
   const hdg = (RAD(Math.atan2(_fwd.x, -_fwd.z))+360)%360;
@@ -2065,6 +2236,7 @@ function frame(now){
   updateCamera(dt);
   updateHUD(dt, kt);
   sfx.update(F.n1, V, F.stall, F.rev);
+  callouts(dt, kt, F.agl, fpm);
 
   if(!F.eng && F.starting<=0 && !F.crashed && F.ground && V<3) msg('MOTORLAR KAPALI','Çalıştırmak için ENTER');
   else if(!F.crashed && (F.eng||F.starting>0)) msg(null);
