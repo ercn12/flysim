@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>ECOOMEDYA · Uçuş Simülatörü</title>
+<title>eco · Uçuş Simülatörü</title>
 <style>
   :root{
     --ink:#05070a;
@@ -50,6 +50,14 @@
     background:rgba(8,12,16,.7); border:1px solid var(--line); padding:7px 16px}
   #toast.show{opacity:1}
 
+  #proc{right:16px; top:14px; background:rgba(8,12,16,.78); border:1px solid var(--line);
+    border-left:2px solid var(--amber); padding:11px 14px; font-size:11px; line-height:1.75;
+    letter-spacing:.04em; max-width:280px; backdrop-filter:blur(6px)}
+  #proc h4{font-size:10px; letter-spacing:.22em; color:var(--amber); margin-bottom:8px; font-weight:600}
+  #proc .ci{color:var(--dim)}
+  #proc .ci.ok{color:var(--glass)}
+  #proc .ch{margin-top:8px; padding-top:7px; border-top:1px solid var(--line);
+    color:#aeb9c2; font-size:10px; line-height:1.6}
   #help{right:16px; bottom:16px; background:rgba(8,12,16,.74); border:1px solid var(--line);
     padding:11px 13px; font-size:10.5px; line-height:1.7; letter-spacing:.04em; max-width:264px}
   #help h4{font-size:9px; letter-spacing:.24em; color:var(--amber); margin-bottom:8px; font-weight:600}
@@ -104,7 +112,7 @@
 <div class="hud" id="apbar">
   <div class="chip" id="cAp"><div class="k">Otopilot</div><div class="v">KAPALI</div></div>
   <div class="chip" id="cAt"><div class="k">Oto Gaz</div><div class="v">KAPALI</div></div>
-  <div class="chip" id="cIls"><div class="k">ILS 36</div><div class="v">—</div></div>
+  <div class="chip" id="cIls"><div class="k">ILS</div><div class="v">—</div></div>
   <div class="chip" id="cSpl"><div class="k">Spoyler</div><div class="v">0%</div></div>
   <div class="chip" id="cWind"><div class="k">Rüzgâr</div><div class="v">210° 12kt</div></div>
   <div class="chip" id="cRa"><div class="k">Radyo Alt.</div><div class="v">—</div></div>
@@ -118,6 +126,8 @@
   <div class="small" id="msgSmall">Çalıştırmak için ENTER</div>
 </div></div>
 
+<div class="hud" id="proc"></div>
+
 <div class="hud" id="help">
   <h4>KUMANDALAR</h4>
   <b>W / S</b> burun aşağı / yukarı (AP açıkken irtifa)<br>
@@ -130,15 +140,19 @@
   <b>Boşluk</b> spoyler &nbsp; <b>K</b> yer spoyleri<br>
   <b>Z</b> ters itki (basılı) &nbsp; <b>L</b> farlar<br>
   <b>1</b> otopilot &nbsp; <b>3</b> oto gaz &nbsp; <b>4</b> ILS<br>
-  <b>M</b> rüzgâr &nbsp; <b>6/7</b> motor arızası / onar<br>
+  <b>M</b> rüzgâr &nbsp; <b>N</b> saat &nbsp; <b>V</b> görüş<br>
+  <b>6/7</b> motor arıza/onar<br>
+  <b>9</b> ND menzili &nbsp; <b>0</b> ILS pisti<br>
+  <i style="color:#7d8b96">4 = en yakın pisti otomatik seçer</i><br>
   <b>8 / 2</b> ses aç / kıs &nbsp; <b>5</b> sessiz<br>
   <b>P</b> grafik kalitesi<br>
-  <b>R</b> piste dön &nbsp; <b>H</b> bu paneli gizle
+  <b>Y</b> park freni &nbsp; <b>U</b> geri itme<br>
+  <b>R</b> kapıya dön &nbsp; <b>T</b> pist başı &nbsp; <b>H</b> gizle
 </div>
 <div class="hud" id="hint" style="display:none">H · YARDIM</div>
 
 <div id="boot">
-  <div class="brand">ECOOMEDYA · AVIATION</div>
+  <div class="brand">eco · AVIATION</div>
   <h1>UÇUŞ SİMÜLATÖRÜ</h1>
   <div class="sub">Airbus A380 · TC-ECO · gerçek altı temel gösterge · prosedürel arazi, kıyı şeridi ve 3200 m pist</div>
   <div class="bar"><i id="bootBar"></i></div>
@@ -182,8 +196,28 @@ function ridge(x,y,oct){
 }
 
 /* ---------------- arazi yükseklik fonksiyonu ---------------- */
-const FIELD_ELEV = 24;          // havaalanı kotu (m)
+const FIELD_ELEV = 24;          // LTFJ kotu (m) · pist yüzeyi bunun 0.42 m üstünde
 const SEA = 0;                  // deniz seviyesi
+const FIELDS = [
+  {id:'LTFJ', x:0,      z:0,      elev: 24, r0:2600, r1:5400, axis:'z', len:3200, w:60, rwy:'36/18'},
+  {id:'LTBX', x:-16000, z:-52000, elev:180, r0:2100, r1:4600, axis:'x', len:2600, w:45, rwy:'09/27'},
+  {id:'LTAD', x: 40000, z: 20000, elev: 14, r0:1700, r1:3600, axis:'z', len:2200, w:45, rwy:'36/18',
+   island:{r:5600, h:115}, name:'MAVİ ADA'},
+  {id:'LTAM', x: 18000, z: 52000, elev:  6, r0:1900, r1:4200, axis:'x', len:2600, w:45, rwy:'09/27',
+   island:{r:7200, h: 40}, name:'MERCAN'},
+  {id:'LTAY', x:-38000, z: 30000, elev: 40, r0:1600, r1:3400, axis:'z', len:2000, w:45, rwy:'36/18',
+   island:{r:4900, h:170}, name:'YILDIZ'},
+  {id:'LTAK', x: 62000, z:-14000, elev: 95, r0:1400, r1:3000, axis:'x', len:1800, w:40, rwy:'09/27',
+   island:{r:4300, h:300}, name:'KAYALIK'},
+  {id:'LTAZ', x: 74000, z: 36000, elev:120, r0:1700, r1:3600, axis:'z', len:2400, w:45, rwy:'36/18',
+   island:{r:6300, h:230}, name:'ZEYTİN'},
+  {id:'LTCS', x: -4000, z: 46000, elev: 62, r0:2000, r1:4400, axis:'x', len:2800, w:48, rwy:'09/27',
+   city:{cx:2600, cz:2600, r:5200}, name:'ŞEHİR'}
+];
+for(const f of FIELDS){
+  const R = Math.max(f.r1, f.island ? f.island.r*1.05 : 0);
+  f._far2 = R*R;                                   // hızlı eleme için kare yarıçap
+}
 function terrainH(x,z){
   const cont = fbm(x*0.000055, z*0.000055, 4);          // kıta maskesi
   const land = smoothstep(0.40, 0.60, cont);
@@ -191,10 +225,23 @@ function terrainH(x,z){
   h += ridge(x*0.00018, z*0.00018, 4) * 980 * Math.pow(land,1.7);
   h += fbm(x*0.0011, z*0.0011, 3) * 46 * land;
   h += fbm(x*0.0065, z*0.0065, 2) * 5.5 * land;
-  // havaalanı düzlüğü
-  const d = Math.sqrt(x*x + z*z);
-  const flat = smoothstep(2600, 5400, d);
-  return h*flat + FIELD_ELEV*(1-flat);
+  for(let i=0;i<FIELDS.length;i++){
+    const f = FIELDS[i];
+    const ddx = x-f.x, ddz = z-f.z, d2 = ddx*ddx + ddz*ddz;
+    if(d2 > f._far2) continue;                      // uzaksa hiç hesaplama yapma
+    const d = Math.sqrt(d2);
+    if(f.island && d < f.island.r*1.05){            // ada kabartması
+      const dn = d/f.island.r;
+      const w = 1 - smoothstep(0.60, 1.02, dn);
+      const prof = Math.sin(Math.PI*clamp((dn-0.34)/0.56, 0, 1));
+      h = h*(1-w) + (f.elev + prof*f.island.h*(0.35+0.65*fbm(x*0.0011, z*0.0011, 3)))*w;
+    }
+    if(d < f.r1){                                   // meydan düzlüğü
+      const w = 1 - smoothstep(f.r0, f.r1, d);
+      if(w > 0.001) h = h*(1-w) + f.elev*w;
+    }
+  }
+  return h;
 }
 
 /* ---------------- prosedürel dokular ---------------- */
@@ -267,7 +314,8 @@ function cloudTex(){
    SAHNE
    ========================================================================= */
 const app = document.getElementById('app');
-const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:'high-performance'});
+const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:'high-performance',
+                                          logarithmicDepthBuffer:true});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 1.5));
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputEncoding = THREE.sRGBEncoding;
@@ -278,31 +326,39 @@ app.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 const HORIZON = new THREE.Color(0x9fb8c9);
-scene.fog = new THREE.FogExp2(0x9fb8c9, 0.00009);
+scene.fog = new THREE.FogExp2(0x9fb8c9, 0.000105);
 
-const camera = new THREE.PerspectiveCamera(68, innerWidth/innerHeight, 0.06, 30000);
+const camera = new THREE.PerspectiveCamera(68, innerWidth/innerHeight, 0.12, 32000);
 
 /* --- gökyüzü kubbesi --- */
 const skyMat = new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite:false, depthTest:false, fog:false,
-  uniforms:{ sun:{value:new THREE.Vector3(0.35,0.55,-0.75)} },
+  uniforms:{ sun:{value:new THREE.Vector3(0.35,0.55,-0.75)}, dayF:{value:1.0}, duskF:{value:0.0} },
   vertexShader:`varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0);} `,
   fragmentShader:`
-    varying vec3 vP; uniform vec3 sun;
+    varying vec3 vP; uniform vec3 sun; uniform float dayF; uniform float duskF;
     void main(){
-      float h = clamp(vP.y*1.05+0.05, -1.0, 1.0);
-      vec3 top = vec3(0.15,0.33,0.62);
-      vec3 mid = vec3(0.44,0.62,0.80);
-      vec3 low = vec3(0.72,0.79,0.84);
+      vec3 d = normalize(vP);
+      float h = clamp(d.y*1.05+0.05, -1.0, 1.0);
+      vec3 top = mix(vec3(0.010,0.018,0.052), vec3(0.15,0.33,0.62), dayF);
+      vec3 mid = mix(vec3(0.030,0.048,0.105), vec3(0.44,0.62,0.80), dayF);
+      vec3 low = mix(vec3(0.055,0.075,0.135), vec3(0.72,0.79,0.84), dayF);
+      low = mix(low, vec3(0.88,0.46,0.24), duskF*0.85);
+      mid = mix(mid, vec3(0.46,0.34,0.46), duskF*0.55);
       vec3 col = mix(low, mid, smoothstep(-0.02,0.22,h));
       col = mix(col, top, smoothstep(0.18,0.85,h));
-      float s = max(dot(normalize(vP), normalize(sun)),0.0);
-      col += vec3(1.0,0.86,0.62)*pow(s,180.0)*1.4;
-      col += vec3(1.0,0.80,0.55)*pow(s,7.0)*0.14;
+      float sd = max(dot(d, normalize(sun)),0.0);
+      col += vec3(1.0,0.86,0.62)*pow(sd,180.0)*1.4*step(-0.05, sun.y);
+      col += vec3(1.0,0.72,0.45)*pow(sd,8.0)*0.20*(0.25+duskF);
+      if(dayF < 0.40 && d.y > -0.02){
+        vec3 g = floor(d*170.0);
+        float n = fract(sin(dot(g, vec3(12.9898,78.233,37.719)))*43758.5453);
+        col += vec3(smoothstep(0.9972,1.0,n) * (1.0-dayF/0.40) * smoothstep(-0.02,0.25,d.y));
+      }
       gl_FragColor = vec4(col,1.0);
     }`
 });
-const sky = new THREE.Mesh(new THREE.SphereGeometry(16000, 32, 20), skyMat);
+const sky = new THREE.Mesh(new THREE.SphereGeometry(30000, 32, 20), skyMat);
 sky.frustumCulled = false; sky.renderOrder = -1000;
 scene.add(sky);
 
@@ -312,16 +368,58 @@ const sun = new THREE.DirectionalLight(0xfff0d8, 1.15);
 sun.position.copy(sunDir).multiplyScalar(700);
 sun.castShadow = true;
 sun.shadow.mapSize.set(1024,1024);
+sun.shadow.bias = -0.0006;
+sun.shadow.normalBias = 1.2;
 const sc = sun.shadow.camera;
 sc.near=1; sc.far=1400; sc.left=-260; sc.right=260; sc.top=260; sc.bottom=-260;
 scene.add(sun); scene.add(sun.target);
-scene.add(new THREE.HemisphereLight(0xa8c6e0, 0x4d4a3c, 0.62));
-scene.add(new THREE.AmbientLight(0xffffff, 0.18));
+const hemi = new THREE.HemisphereLight(0xa8c6e0, 0x4d4a3c, 0.62);
+const amb  = new THREE.AmbientLight(0xffffff, 0.18);
+scene.add(hemi); scene.add(amb);
+
+/* --- günün saati --- */
+const TODS = [
+  {n:'GÜNDÜZ',      el: 54, az:140, i:1.15, c:0xfff0d8, hemi:0.62, amb:0.18, fog:0x9fb8c9},
+  {n:'İKİNDİ',      el: 22, az:250, i:0.95, c:0xffe0b0, hemi:0.48, amb:0.15, fog:0xc9c3bd},
+  {n:'GÜN BATIMI',  el:  3, az:268, i:0.60, c:0xffa860, hemi:0.30, amb:0.12, fog:0xd8a07a},
+  {n:'GECE',        el:-14, az:300, i:0.10, c:0x7f95c8, hemi:0.10, amb:0.06, fog:0x090e16}
+];
+let todI = 0, nightF = 0;
+function setTOD(i){
+  todI = ((i % TODS.length) + TODS.length) % TODS.length;
+  const T = TODS[todI];
+  const el = DEG(T.el), az = DEG(T.az);
+  sunDir.set(Math.cos(el)*Math.sin(az), Math.sin(el), -Math.cos(el)*Math.cos(az)).normalize();
+  sun.color.setHex(T.c); sun.intensity = T.i;
+  hemi.intensity = T.hemi; amb.intensity = T.amb;
+  scene.fog.color.setHex(T.fog);
+  seaMat.color.setHex(T.el > 5 ? 0x18475f : (T.el > -5 ? 0x243a48 : 0x0a1a26));
+  skyMat.uniforms.sun.value.copy(sunDir);
+  skyMat.uniforms.dayF.value  = clamp(T.el/16 + 0.35, 0, 1);
+  skyMat.uniforms.duskF.value = clamp(1 - Math.abs(T.el)/14, 0, 1);
+  nightF = 1 - clamp((T.el+8)/18, 0, 1);
+  cabinLight.intensity = 0.7 + nightF*1.1;
+  runwayLightsOn(nightF > 0.25);
+  if(CITY_MAT) CITY_MAT.emissive.setHex(nightF > 0.25 ? 0xffffff : 0x000000);
+}
+
+/* --- görüş / hava --- */
+const VIS = [
+  {n:'AÇIK',      f:0.000105},
+  {n:'PUSLU',     f:0.00019},
+  {n:'SİS',       f:0.00048},
+  {n:'YOĞUN SİS', f:0.00095}
+];
+let visI = 0;
+function setVis(i){
+  visI = ((i % VIS.length) + VIS.length) % VIS.length;
+  scene.fog.density = VIS[visI].f;
+}
 
 /* =========================================================================
    ARAZİ  (uçakla birlikte kayan, dünya-tutarlı yükseklikli tek levha)
    ========================================================================= */
-const TSIZE = 13000, TSEG = 160, SNAP = 900;
+const TSIZE = 25600, TSEG = 320, SNAP = 800;   // hücre 80 m · SNAP tam 10 hücre
 const terrGeo = new THREE.PlaneGeometry(TSIZE, TSIZE, TSEG, TSEG);
 terrGeo.rotateX(-Math.PI/2);
 terrGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(terrGeo.attributes.position.count*3),3));
@@ -359,7 +457,7 @@ function terrVertex(i, cx, cz){
   else if(h < 720)   _c.copy(C_FOREST).lerp(C_ROCK, smoothstep(320,700,h));
   else               _c.copy(C_ROCK).lerp(C_SNOW, smoothstep(720,1000,h));
   if(h>2 && h<12) _c.lerp(C_SAND, 1-smoothstep(2,12,h));
-  const sh = 0.86 + t*0.28;
+  const sh = 0.93 + t*0.14;
   T_c[i*3]=_c.r*sh; T_c[i*3+1]=_c.g*sh; T_c[i*3+2]=_c.b*sh;
 }
 function terrNormal(i){
@@ -371,18 +469,24 @@ function terrNormal(i){
   const l = Math.sqrt(sx*sx + 1 + sz*sz);
   T_n[i*3]=sx/l; T_n[i*3+1]=1/l; T_n[i*3+2]=sz/l;
 }
+let terrPending = false;
 function terrCommit(cx,cz){
   const pa = terrGeo.attributes.position.array;
   for(let i=0;i<TN;i++) pa[i*3+1] = T_h[i];
-  terrGeo.attributes.color.array.set(T_c);
   terrGeo.attributes.normal.array.set(T_n);
   terrGeo.attributes.position.needsUpdate = true;
-  terrGeo.attributes.color.needsUpdate = true;
   terrGeo.attributes.normal.needsUpdate = true;
   terrain.position.set(cx, 0, cz);
   terrCx = cx; terrCz = cz;
+  terrPending = true;                       // renkler bir sonraki karede yüklenir
 }
 function rebuildTerrain(px, pz, force){
+  if(terrPending){                          // yüklemeyi kareye yay
+    terrGeo.attributes.color.array.set(T_c);
+    terrGeo.attributes.color.needsUpdate = true;
+    terrPending = false;
+    if(!force) return;
+  }
   if(!terrJob){
     const cx = Math.round(px/SNAP)*SNAP, cz = Math.round(pz/SNAP)*SNAP;
     if(cx===terrCx && cz===terrCz) return;
@@ -408,58 +512,165 @@ function rebuildTerrain(px, pz, force){
 
 /* --- deniz --- */
 const seaMat = new THREE.MeshPhongMaterial({color:0x18475f, shininess:110, specular:0x88bbdd, transparent:true, opacity:0.94});
-const sea = new THREE.Mesh(new THREE.PlaneGeometry(40000,40000,1,1), seaMat);
+const sea = new THREE.Mesh(new THREE.PlaneGeometry(80000,80000,1,1), seaMat);
 sea.rotation.x = -Math.PI/2; sea.position.y = SEA; sea.renderOrder = -1;
 scene.add(sea);
 
 /* =========================================================================
-   HAVAALANI
+   HAVAALANI — LTFJ · pist 36 · terminal, taksi yolu ağı ve park pozisyonları
    ========================================================================= */
 const RW_LEN = 3200, RW_W = 60;
+const PAVE = 0.42;                       // asfaltın zeminden yüksekliği
 const airport = new THREE.Group(); scene.add(airport);
 
+/* --- dokular --- */
+function taxiTex(){
+  const c = cv(128,128), g = c.getContext('2d');
+  g.fillStyle='#2b2f34'; g.fillRect(0,0,128,128);
+  for(let i=0;i<2600;i++){ const v=24+Math.random()*34;
+    g.fillStyle='rgba('+v+','+v+','+(v+3)+',0.5)'; g.fillRect(Math.random()*128,Math.random()*128,2,2); }
+  g.fillStyle='#e8c22a'; g.fillRect(61,0,6,128);          // sarı orta çizgi
+  return tex(c);
+}
+function standTex(){
+  const c = cv(128,128), g = c.getContext('2d');
+  g.fillStyle='#4a4e53'; g.fillRect(0,0,128,128);
+  for(let i=0;i<2000;i++){ const v=58+Math.random()*30;
+    g.fillStyle='rgba('+v+','+v+','+(v+3)+',0.45)'; g.fillRect(Math.random()*128,Math.random()*128,2,2); }
+  g.strokeStyle='rgba(20,22,25,0.5)'; g.lineWidth=2;
+  for(let i=0;i<=128;i+=32){ g.beginPath(); g.moveTo(i,0); g.lineTo(i,128);
+    g.moveTo(0,i); g.lineTo(128,i); g.stroke(); }
+  return tex(c);
+}
+const taxiMat = new THREE.MeshLambertMaterial({map: taxiTex(),
+  polygonOffset:true, polygonOffsetFactor:-3, polygonOffsetUnits:-6});
+taxiMat.map.wrapT = THREE.RepeatWrapping;
+const standMat = new THREE.MeshLambertMaterial({map: standTex(),
+  polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-4});
+standMat.map.wrapS = standMat.map.wrapT = THREE.RepeatWrapping;
+
+/* --- pist --- */
 const runway = new THREE.Mesh(
   new THREE.PlaneGeometry(RW_W, RW_LEN),
-  new THREE.MeshLambertMaterial({map: runwayTex()})
+  new THREE.MeshLambertMaterial({map: runwayTex(), polygonOffset:true,
+                                 polygonOffsetFactor:-4, polygonOffsetUnits:-8})
 );
 runway.rotation.x = -Math.PI/2;
-runway.position.set(0, FIELD_ELEV+0.06, 0);
+runway.position.set(0, FIELD_ELEV+PAVE, 0);
 runway.receiveShadow = true;
 airport.add(runway);
 
-// çim apron
-const apronMat = new THREE.MeshLambertMaterial({map: grainTex('#4f6b3c', 26)});
-apronMat.map.repeat.set(30,30); apronMat.map.wrapS = apronMat.map.wrapT = THREE.RepeatWrapping;
-const apron = new THREE.Mesh(new THREE.PlaneGeometry(700, RW_LEN+500), apronMat);
-apron.rotation.x = -Math.PI/2; apron.position.set(0, FIELD_ELEV+0.02, 0);
-airport.add(apron);
+/* --- çim apron --- */
+const apronMat = new THREE.MeshLambertMaterial({map: grainTex('#4f6b3c', 26),
+  polygonOffset:true, polygonOffsetFactor:-1, polygonOffsetUnits:-2});
+apronMat.map.repeat.set(40,40); apronMat.map.wrapS = apronMat.map.wrapT = THREE.RepeatWrapping;
+const grass = new THREE.Mesh(new THREE.PlaneGeometry(1500, RW_LEN+700), apronMat);
+grass.rotation.x = -Math.PI/2; grass.position.set(320, FIELD_ELEV+0.16, 0);
+airport.add(grass);
 
-// taksi yolu + park yeri
-const asphalt = new THREE.MeshLambertMaterial({map: grainTex('#2a2e33', 22)});
-const taxi = new THREE.Mesh(new THREE.PlaneGeometry(26, 700), asphalt);
-taxi.rotation.x=-Math.PI/2; taxi.position.set(90, FIELD_ELEV+0.05, 900); airport.add(taxi);
-const ramp = new THREE.Mesh(new THREE.PlaneGeometry(280, 180), asphalt);
-ramp.rotation.x=-Math.PI/2; ramp.position.set(210, FIELD_ELEV+0.05, 700); airport.add(ramp);
-const link = new THREE.Mesh(new THREE.PlaneGeometry(90, 24), asphalt);
-link.rotation.x=-Math.PI/2; link.position.set(52, FIELD_ELEV+0.05, 1560); airport.add(link);
+/* --- taksi yolu üreteci --- */
+const PAVED = [];                          // [x0,x1,z0,z1] asfalt alanlar
+const MAP = { taxi:[], stands:[], bldg:[] };
+const OBST = [];                           // {x,z,rx,rz,y1} çarpışma kutuları
+let CITY_MAT = null;
+function paved(x0,x1,z0,z1){ PAVED.push([Math.min(x0,x1),Math.max(x0,x1),
+                                         Math.min(z0,z1),Math.max(z0,z1)]); }
+function taxiway(x1,z1,x2,z2,w,mat,rep){
+  const dx=x2-x1, dz=z2-z1, len=Math.hypot(dx,dz);
+  const g = new THREE.PlaneGeometry(w, len);
+  const uv = g.attributes.uv;
+  for(let i=0;i<uv.count;i++) uv.setY(i, uv.getY(i)*len/(rep||45));
+  uv.needsUpdate = true;
+  const mesh = new THREE.Mesh(g, mat||taxiMat);
+  mesh.rotation.x = -Math.PI/2; mesh.receiveShadow = true;
+  const grp = new THREE.Group(); grp.add(mesh);
+  grp.position.set((x1+x2)/2, FIELD_ELEV+PAVE, (z1+z2)/2);
+  grp.rotation.y = Math.atan2(dx, dz);
+  airport.add(grp);
+  MAP.taxi.push([x1,z1,x2,z2,w]);
+  paved(Math.min(x1,x2)-w/2, Math.max(x1,x2)+w/2, Math.min(z1,z2)-w/2, Math.max(z1,z2)+w/2);
+  return grp;
+}
+/* paralel taksi yolu A ve bağlantılar */
+taxiway(150,-1750, 150, 1700, 32);                 // TWY A
+taxiway( 33, 1560, 150, 1560, 32);                 // A1 · RWY 36 bekleme noktası
+taxiway( 33,  300, 150,  300, 32);                 // A2
+taxiway( 33, -560, 150, -560, 32);                 // A3
+taxiway( 33,-1560, 150,-1560, 32);                 // A4
+taxiway(150, 1640, 230, 1640, 32);                 // apron bağlantısı
+taxiway(230,  140, 230, 1640, 32);                 // apron şeridi
 
-// pist kenar ışıkları
-const lampGeo = new THREE.BoxGeometry(0.5,0.5,0.5);
-const lampW = new THREE.MeshBasicMaterial({color:0xfff4d0});
-const lampR = new THREE.MeshBasicMaterial({color:0xff3b2a});
-const lampG = new THREE.MeshBasicMaterial({color:0x35ff8a});
-for(let z=-RW_LEN/2; z<=RW_LEN/2; z+=90){
-  for(const s of [-1,1]){
-    const m = new THREE.Mesh(lampGeo, lampW);
-    m.position.set(s*(RW_W/2+2.5), FIELD_ELEV+0.4, z); airport.add(m);
+/* --- park pozisyonları ve terminal önü --- */
+const STANDS = [];
+const STAND_Z = [220, 400, 580, 760];
+const STAND_X = 430;                                // uçağın park noktası (x)
+for(let i=0;i<STAND_Z.length;i++){
+  const z = STAND_Z[i];
+  taxiway(240, z, STAND_X+40, z, 26);               // giriş hattı
+  STANDS.push({n:'A'+(i+1), x:STAND_X, z:z});
+  MAP.stands.push({n:'A'+(i+1), x:STAND_X, z:z});
+}
+const apronPad = new THREE.Mesh(new THREE.PlaneGeometry(360, 800), standMat);
+apronPad.material.map.repeat.set(9,20);
+apronPad.rotation.x = -Math.PI/2;
+apronPad.position.set(430, FIELD_ELEV+PAVE-0.01, 490);
+apronPad.receiveShadow = true; airport.add(apronPad);
+paved(250, 610, 90, 890);
+
+/* --- terminal --- */
+(function(){
+  const T = new THREE.Group();
+  const glass = new THREE.MeshPhongMaterial({color:0x223744, shininess:140, specular:0xffffff});
+  const wall  = new THREE.MeshLambertMaterial({color:0xd9dde0});
+  const roof  = new THREE.MeshLambertMaterial({color:0x8b9196});
+  const body = new THREE.Mesh(new THREE.BoxGeometry(90, 26, 880), wall);
+  body.position.set(0,13,0); body.castShadow = body.receiveShadow = true; T.add(body);
+  const gl = new THREE.Mesh(new THREE.BoxGeometry(2, 15, 860), glass);
+  gl.position.set(-45.5, 13, 0); T.add(gl);
+  const rf = new THREE.Mesh(new THREE.BoxGeometry(98, 2.4, 890), roof);
+  rf.position.set(0, 26.5, 0); rf.castShadow = true; T.add(rf);
+  // kapı numaraları
+  for(let i=0;i<STAND_Z.length;i++){
+    const c = cv(256,128), x = c.getContext('2d');
+    x.fillStyle='#0d1116'; x.fillRect(0,0,256,128);
+    x.fillStyle='#ffb020'; x.font='bold 84px Arial, sans-serif';
+    x.textAlign='center'; x.textBaseline='middle'; x.fillText('A'+(i+1),128,68);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(14,7),
+      new THREE.MeshBasicMaterial({map:tex(c)}));
+    m.position.set(-46.6, 20, STAND_Z[i]-490); m.rotation.y = -Math.PI/2; T.add(m);
+    // körük
+    const br = new THREE.Mesh(new THREE.BoxGeometry(56, 5.5, 6), wall);
+    br.position.set(-74, 9.5, STAND_Z[i]-490); br.castShadow = true; T.add(br);
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(9, 7, 9), roof);
+    cab.position.set(-101, 9.5, STAND_Z[i]-490); cab.castShadow = true; T.add(cab);
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.9,0.9,7,8), roof);
+    leg.position.set(-101, 3.2, STAND_Z[i]-490); T.add(leg);
   }
-}
-for(let x=-RW_W/2; x<=RW_W/2; x+=7.5){
-  const a=new THREE.Mesh(lampGeo, lampG); a.position.set(x, FIELD_ELEV+0.4, RW_LEN/2); airport.add(a);
-  const b=new THREE.Mesh(lampGeo, lampR); b.position.set(x, FIELD_ELEV+0.4, -RW_LEN/2); airport.add(b);
-}
+  T.position.set(605, FIELD_ELEV, 490);
+  airport.add(T);
+  MAP.bldg.push([560,650, 50,930]);
+  OBST.push({x:605, z:490, rx:45, rz:440, y1:FIELD_ELEV+27});
+})();
 
-// hangarlar
+/* --- kule --- */
+(function(){
+  const g = new THREE.Group();
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(4.5,6.0,34,14),
+    new THREE.MeshLambertMaterial({color:0xd6d2c6}));
+  shaft.position.y=17; shaft.castShadow=true;
+  const cab = new THREE.Mesh(new THREE.CylinderGeometry(9,7.6,7,14),
+    new THREE.MeshPhongMaterial({color:0x22303a, shininess:120}));
+  cab.position.y=37; cab.castShadow=true;
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(9.8,9.8,1.0,14),
+    new THREE.MeshLambertMaterial({color:0x9aa0a4}));
+  top.position.y=41;
+  g.add(shaft,cab,top); g.position.set(330, FIELD_ELEV, 1150);
+  airport.add(g);
+  MAP.bldg.push([320,340, 1140,1160]);
+  OBST.push({x:330, z:1150, rx:10, rz:10, y1:FIELD_ELEV+42});
+})();
+
+/* --- hangarlar --- */
 function hangar(x,z,w,d,h,col){
   const g = new THREE.Group();
   const body = new THREE.Mesh(new THREE.BoxGeometry(w,h,d),
@@ -469,47 +680,313 @@ function hangar(x,z,w,d,h,col){
     new THREE.MeshLambertMaterial({color:0x8d959b, side:THREE.DoubleSide}));
   roof.rotation.z = -Math.PI/2; roof.rotation.y = Math.PI/2; roof.position.y = h;
   roof.castShadow = true;
-  const door = new THREE.Mesh(new THREE.PlaneGeometry(w*0.72, h*0.78),
-    new THREE.MeshLambertMaterial({color:0x2c3238}));
-  door.position.set(0, h*0.39, -d/2-0.05); door.rotation.y = Math.PI;
-  g.add(body, roof, door);
-  g.position.set(x, FIELD_ELEV, z);
+  g.add(body, roof); g.position.set(x, FIELD_ELEV, z);
+  MAP.bldg.push([x-w/2, x+w/2, z-d/2, z+d/2]);
+  OBST.push({x:x, z:z, rx:w/2, rz:d/2, y1:FIELD_ELEV+h+w/2});
   return g;
 }
-airport.add(hangar(250, 640, 84, 60, 20, 0xb6bcc0));
-airport.add(hangar(250, 760, 76, 54, 19, 0xa2a8ac));
-airport.add(hangar(330, 540, 56, 44, 16, 0xc2c6c8));
+airport.add(hangar(430, -420, 100, 70, 24, 0xb6bcc0));
+airport.add(hangar(430, -560, 90, 62, 22, 0xa2a8ac));
 
-// kule
-(function(){
-  const g = new THREE.Group();
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(3.2,4.2,22,12),
-    new THREE.MeshLambertMaterial({color:0xd6d2c6}));
-  shaft.position.y=11; shaft.castShadow=true;
-  const cab = new THREE.Mesh(new THREE.CylinderGeometry(6,5.2,5,12),
-    new THREE.MeshPhongMaterial({color:0x22303a, shininess:90}));
-  cab.position.y=24; cab.castShadow=true;
-  const top = new THREE.Mesh(new THREE.CylinderGeometry(6.6,6.6,0.7,12),
-    new THREE.MeshLambertMaterial({color:0x9aa0a4}));
-  top.position.y=27;
-  g.add(shaft,cab,top); g.position.set(150, FIELD_ELEV, 820);
-  airport.add(g);
-})();
-
-// rüzgar tulumu
+/* --- rüzgâr tulumu --- */
 const sock = new THREE.Group();
 (function(){
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.2,7,8),
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.20,0.26,9,8),
     new THREE.MeshLambertMaterial({color:0xdadada}));
-  pole.position.y=3.5;
-  const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.55,1.1,3.4,10,1,true),
+  pole.position.y=4.5;
+  const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.7,1.5,4.4,10,1,true),
     new THREE.MeshLambertMaterial({color:0xff7a1a, side:THREE.DoubleSide}));
-  cone.rotation.z = Math.PI/2; cone.position.set(1.9,6.6,0);
-  sock.add(pole,cone); sock.position.set(70, FIELD_ELEV, 1500);
+  cone.rotation.z = Math.PI/2; cone.position.set(2.5,8.5,0);
+  sock.add(pole,cone); sock.position.set(95, FIELD_ELEV, 1450);
   airport.add(sock);
 })();
 
-// ağaçlar (instanced)
+/* --- pist ve taksi yolu ışıkları --- */
+const LAMPS = {w:[], r:[], g:[], b:[]}, LAMP_MESH = [];
+function addLamp(x,y,z,t){ LAMPS[t].push(x,y,z); }
+const lampGeo = new THREE.BoxGeometry(0.7,0.7,0.7);
+const lampW = new THREE.MeshBasicMaterial({color:0xfff4d0});
+const lampR = new THREE.MeshBasicMaterial({color:0xff3b2a});
+const lampG = new THREE.MeshBasicMaterial({color:0x35ff8a});
+const lampB = new THREE.MeshBasicMaterial({color:0x3a6bff});
+for(let z=-RW_LEN/2; z<=RW_LEN/2; z+=90)
+  for(const s of [-1,1]) addLamp(s*(RW_W/2+2.5), FIELD_ELEV+0.8, z, 'w');
+for(let x=-RW_W/2; x<=RW_W/2; x+=7.5){
+  addLamp(x, FIELD_ELEV+0.8,  RW_LEN/2, 'g');
+  addLamp(x, FIELD_ELEV+0.8, -RW_LEN/2, 'r');
+}
+for(let z=-1700; z<=1650; z+=120)                  // TWY A mavi kenar ışıkları
+  for(const s of [-1,1]) addLamp(150+s*18, FIELD_ELEV+0.8, z, 'b');
+
+/* --- PAPI ve yaklaşma ışıkları (pist 36) --- */
+const PAPI = [];
+(function(){
+  const ang = [3.50, 3.167, 2.833, 2.50];
+  for(let i=0;i<4;i++){
+    const m = new THREE.Mesh(new THREE.BoxGeometry(2.6,1.4,1.4),
+      new THREE.MeshBasicMaterial({color:0xffffff}));
+    m.position.set(-(RW_W/2+16+i*8), FIELD_ELEV+1.6, 1300);
+    m.userData.ang = ang[i];
+    airport.add(m); PAPI.push(m);
+  }
+})();
+const APPR_LIGHTS = [];
+(function(){
+  for(let k=1;k<=9;k++){
+    const z = RW_LEN/2 + k*70;
+    const n = k<=3 ? 5 : 3;
+    for(let j=0;j<n;j++){
+      const m = new THREE.Mesh(lampGeo, new THREE.MeshBasicMaterial({color:0xfff6de}));
+      m.position.set((j-(n-1)/2)*7, FIELD_ELEV+1.0+k*0.25, z);
+      m.userData.seq = k;
+      airport.add(m); APPR_LIGHTS.push(m);
+    }
+  }
+})();
+function buildLamps(){
+  const mats = {w:lampW, r:lampR, g:lampG, b:lampB};
+  for(const k in LAMPS){
+    const a = LAMPS[k], n = a.length/3;
+    if(!n) continue;
+    const im = new THREE.InstancedMesh(lampGeo, mats[k], n);
+    im.frustumCulled = false; scene.add(im);
+    LAMP_MESH.push({im, a, n});
+  }
+  runwayLightsOn(false);
+}
+const _lm = new THREE.Matrix4();
+function runwayLightsOn(on){
+  const sc4 = on ? 3.4 : 1.0;
+  for(const L of LAMP_MESH){
+    for(let i=0;i<L.n;i++){
+      _lm.makeScale(sc4,sc4,sc4);
+      _lm.setPosition(L.a[i*3], L.a[i*3+1], L.a[i*3+2]);
+      L.im.setMatrixAt(i, _lm);
+    }
+    L.im.instanceMatrix.needsUpdate = true;
+  }
+  for(const m of PAPI) m.scale.setScalar(on ? 2.2 : 1);
+  for(const m of APPR_LIGHTS){ m.visible = on; m.scale.setScalar(on ? 3.0 : 1); }
+}
+function updatePAPI(){
+  const dz = F.pos.z - 1300;
+  if(dz < 60 || dz > 14000){ for(const m of PAPI) m.material.color.setHex(0x6a6f74); return; }
+  const a = RAD(Math.atan2(F.pos.y - (FIELD_ELEV+PAVE), dz));
+  for(const m of PAPI)
+    m.material.color.setHex(a > m.userData.ang ? 0xffffff : 0xff2a1a);
+}
+
+/* --- taksi yolu levhaları --- */
+function sign(x,z,txt2,bg,fg,rot){
+  const c = cv(256,96), g = c.getContext('2d');
+  g.fillStyle=bg; g.fillRect(0,0,256,96);
+  g.strokeStyle='#111'; g.lineWidth=6; g.strokeRect(3,3,250,90);
+  g.fillStyle=fg; g.font='bold 58px Arial, sans-serif';
+  g.textAlign='center'; g.textBaseline='middle'; g.fillText(txt2,128,50);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(7,2.6),
+    new THREE.MeshBasicMaterial({map:tex(c), side:THREE.DoubleSide}));
+  m.position.set(x, FIELD_ELEV+2.0, z); m.rotation.y = rot||0;
+  const leg = new THREE.Mesh(new THREE.BoxGeometry(0.3,1.5,0.3),
+    new THREE.MeshLambertMaterial({color:0x2a2f33}));
+  leg.position.set(x, FIELD_ELEV+0.9, z);
+  airport.add(m, leg);
+}
+sign(180, 1520, '36',  '#c01b1b', '#fff', Math.PI/2);
+sign(180, 1600, 'A1',  '#e8c22a', '#111', Math.PI/2);
+sign(212, 1640, 'APRON','#111',  '#e8c22a', 0);
+sign(180,  260, 'A2',  '#e8c22a', '#111', Math.PI/2);
+sign(180, -600, 'A3',  '#e8c22a', '#111', Math.PI/2);
+sign(268,  400, 'A1-A4','#111',  '#e8c22a', Math.PI/2);
+
+/* --- yer hizmetleri araçları --- */
+function vehicle(x,z,w,h,d,col,ry,cabin){
+  const g = new THREE.Group();
+  const b = new THREE.Mesh(new THREE.BoxGeometry(w,h,d),
+    new THREE.MeshLambertMaterial({color:col}));
+  b.position.y = h/2+0.5; b.castShadow = true; g.add(b);
+  if(cabin){
+    const cb = new THREE.Mesh(new THREE.BoxGeometry(w*0.9, h*0.7, d*0.28),
+      new THREE.MeshPhongMaterial({color:0x22303a, shininess:90}));
+    cb.position.set(0, h+0.5, -d*0.34); cb.castShadow = true; g.add(cb);
+  }
+  for(const sx of [-1,1]) for(const sz of [-1,1]){
+    const w2 = new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,0.4,8),
+      new THREE.MeshLambertMaterial({color:0x141618}));
+    w2.rotation.z = Math.PI/2; w2.position.set(sx*w*0.45, 0.5, sz*d*0.34); g.add(w2);
+  }
+  g.position.set(x, FIELD_ELEV+PAVE, z); g.rotation.y = ry||0;
+  airport.add(g); return g;
+}
+const GSE = [];
+for(const st of STANDS){
+  GSE.push(vehicle(st.x-46, st.z+2,  4, 2.2, 9, 0xf0b429, 0, true));      // itme aracı
+  vehicle(st.x+6,  st.z-34, 4, 4.0, 11, 0xdfe3e6, 0, true);               // yakıt tankeri
+  vehicle(st.x+18, st.z+32, 3.6, 5.5, 8, 0xe0e4e7, 0, true);              // ikram aracı
+  vehicle(st.x-8,  st.z+40, 3, 2.0, 6, 0x3a6bff, 0, true);                // GPU
+  vehicle(st.x-20, st.z-40, 3, 1.6, 12, 0xcfd4d8, 0, false);              // bagaj katarı
+}
+
+/* =========================================================================
+   İKİNCİ MEYDAN — LTBX · pist 09/27, 2600 m, 180 m kot
+   ========================================================================= */
+(function(){
+  const F2 = FIELDS[1], E = F2.elev;
+  const g2 = new THREE.Group(); g2.position.set(F2.x, 0, F2.z); scene.add(g2);
+  const rw = new THREE.Mesh(new THREE.PlaneGeometry(F2.w, F2.len),
+    new THREE.MeshLambertMaterial({map: runwayTex(), polygonOffset:true,
+      polygonOffsetFactor:-4, polygonOffsetUnits:-8}));
+  rw.rotation.x = -Math.PI/2; rw.rotation.z = Math.PI/2;
+  rw.position.set(0, E+PAVE, 0); rw.receiveShadow = true; g2.add(rw);
+  const gr = new THREE.Mesh(new THREE.PlaneGeometry(F2.len+900, 900), apronMat);
+  gr.rotation.x = -Math.PI/2; gr.position.set(0, E+0.16, 0); g2.add(gr);
+  // taksi yolu + apron
+  const tw = new THREE.Mesh(new THREE.PlaneGeometry(F2.len-200, 24), taxiMat);
+  tw.rotation.x = -Math.PI/2; tw.position.set(0, E+PAVE, 190); g2.add(tw);
+  const ap = new THREE.Mesh(new THREE.PlaneGeometry(300, 170), standMat);
+  ap.rotation.x = -Math.PI/2; ap.position.set(600, E+PAVE, 300); g2.add(ap);
+  for(const cx of [-900, 0, 900]){
+    const c2 = new THREE.Mesh(new THREE.PlaneGeometry(24, 170), taxiMat);
+    c2.rotation.x = -Math.PI/2; c2.position.set(cx, E+PAVE, 105); g2.add(c2);
+  }
+  // ışıklar
+  for(let x2=-F2.len/2; x2<=F2.len/2; x2+=90) for(const s2 of [-1,1])
+    addLamp(F2.x+x2, E+0.8, F2.z+s2*(F2.w/2+2.5), 'w');
+  for(let z2=-F2.w/2; z2<=F2.w/2; z2+=7.5){
+    addLamp(F2.x-F2.len/2, E+0.8, F2.z+z2, 'g');
+    addLamp(F2.x+F2.len/2, E+0.8, F2.z+z2, 'r');
+  }
+  // küçük terminal + hangar + kule
+  const wallM = new THREE.MeshLambertMaterial({color:0xd9dde0});
+  const t2 = new THREE.Mesh(new THREE.BoxGeometry(180, 14, 46), wallM);
+  t2.position.set(600, E+7, 400); t2.castShadow = t2.receiveShadow = true; g2.add(t2);
+  const tw2 = new THREE.Mesh(new THREE.CylinderGeometry(4,5.5,26,12), wallM);
+  tw2.position.set(480, E+13, 400); tw2.castShadow = true; g2.add(tw2);
+  const cab2 = new THREE.Mesh(new THREE.CylinderGeometry(7,6,6,12),
+    new THREE.MeshPhongMaterial({color:0x22303a, shininess:110}));
+  cab2.position.set(480, E+29, 400); g2.add(cab2);
+  OBST.push({x:F2.x+600, z:F2.z+400, rx:90, rz:23, y1:E+15});
+  OBST.push({x:F2.x+480, z:F2.z+400, rx:8,  rz:8,  y1:E+32});
+  MAP.bldg.push([F2.x+510, F2.x+690, F2.z+377, F2.z+423]);
+  paved(F2.x-F2.len/2-30, F2.x+F2.len/2+30, F2.z-F2.w/2-30, F2.z+230);
+  paved(F2.x+450, F2.x+750, F2.z+215, F2.z+385);
+})();
+
+/* =========================================================================
+   ADA ve ŞEHİR MEYDANLARI
+   ========================================================================= */
+function buildField(f){
+  const E = f.elev, alongX = f.axis === 'x';
+  const g = new THREE.Group(); g.position.set(f.x, 0, f.z); scene.add(g);
+  const hl = f.len/2;
+  // pist
+  const rw = new THREE.Mesh(new THREE.PlaneGeometry(f.w, f.len),
+    new THREE.MeshLambertMaterial({map: runwayTex(), polygonOffset:true,
+      polygonOffsetFactor:-4, polygonOffsetUnits:-8}));
+  rw.rotation.set(-Math.PI/2, 0, alongX ? Math.PI/2 : 0);
+  rw.position.y = E+PAVE; rw.receiveShadow = true; g.add(rw);
+  // çim
+  const gr = new THREE.Mesh(new THREE.PlaneGeometry(
+      alongX ? f.len+900 : 900, alongX ? 900 : f.len+900), apronMat);
+  gr.rotation.x = -Math.PI/2; gr.position.y = E+0.16; g.add(gr);
+  // paralel taksi yolu + bağlantılar + apron
+  const off = 170;
+  const tw = new THREE.Mesh(new THREE.PlaneGeometry(alongX ? f.len-200 : 24,
+                                                    alongX ? 24 : f.len-200), taxiMat);
+  tw.rotation.x = -Math.PI/2;
+  tw.position.set(alongX?0:off, E+PAVE, alongX?off:0); g.add(tw);
+  for(const c of [-hl+260, 0, hl-260]){
+    const cn = new THREE.Mesh(new THREE.PlaneGeometry(alongX?24:off, alongX?off:24), taxiMat);
+    cn.rotation.x = -Math.PI/2;
+    cn.position.set(alongX?c:off/2, E+PAVE, alongX?off/2:c); g.add(cn);
+  }
+  const ap = new THREE.Mesh(new THREE.PlaneGeometry(320, 200), standMat);
+  ap.rotation.x = -Math.PI/2;
+  ap.position.set(alongX?260:off+180, E+PAVE, alongX?off+150:260); g.add(ap);
+  // ışıklar
+  for(let t=-hl; t<=hl; t+=90) for(const s2 of [-1,1])
+    addLamp(f.x+(alongX?t:s2*(f.w/2+2.5)), E+0.8, f.z+(alongX?s2*(f.w/2+2.5):t), 'w');
+  for(let u=-f.w/2; u<=f.w/2; u+=7.5){
+    addLamp(f.x+(alongX?-hl:u), E+0.8, f.z+(alongX?u:hl), 'g');
+    addLamp(f.x+(alongX? hl:u), E+0.8, f.z+(alongX?u:-hl), 'r');
+  }
+  // terminal + kule
+  const wallM = new THREE.MeshLambertMaterial({color:0xd9dde0});
+  const tx2 = alongX?260:off+180, tz2 = alongX?off+230:260;
+  const bd = new THREE.Mesh(new THREE.BoxGeometry(alongX?200:52, 16, alongX?52:200), wallM);
+  bd.position.set(tx2, E+8, tz2); bd.castShadow = bd.receiveShadow = true; g.add(bd);
+  const tower = new THREE.Mesh(new THREE.CylinderGeometry(4.5,6,30,12), wallM);
+  tower.position.set(tx2 + (alongX?-130:0), E+15, tz2 + (alongX?0:-130)); tower.castShadow=true; g.add(tower);
+  const cabT = new THREE.Mesh(new THREE.CylinderGeometry(8,6.6,6,12),
+    new THREE.MeshPhongMaterial({color:0x22303a, shininess:110}));
+  cabT.position.copy(tower.position); cabT.position.y = E+33; g.add(cabT);
+  OBST.push({x:f.x+tx2, z:f.z+tz2, rx:alongX?100:26, rz:alongX?26:100, y1:E+17});
+  MAP.bldg.push([f.x+tx2-(alongX?100:26), f.x+tx2+(alongX?100:26),
+                 f.z+tz2-(alongX?26:100), f.z+tz2+(alongX?26:100)]);
+  // rüzgâr tulumu
+  const pl = new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.26,9,8), wallM);
+  pl.position.set(alongX?hl-120:110, E+4.5, alongX?110:hl-120); g.add(pl);
+  // asfalt alanlar
+  paved(f.x-(alongX?hl+40:f.w/2+40), f.x+(alongX?hl+40:off+220),
+        f.z-(alongX?f.w/2+40:hl+40), f.z+(alongX?off+220:hl+40));
+  return g;
+}
+for(let i=2;i<FIELDS.length;i++) buildField(FIELDS[i]);
+buildLamps();
+
+/* --- şehir --- */
+(function(){
+  const f = FIELDS.find(q=>q.city), C = f.city;
+  function winTex(lit){
+    const c = cv(64,64), g = c.getContext('2d');
+    g.fillStyle = lit ? '#000000' : '#8f959b'; g.fillRect(0,0,64,64);
+    for(let y=4;y<60;y+=8) for(let x2=4;x2<60;x2+=8){
+      const on = Math.random() < (lit ? 0.42 : 1);
+      g.fillStyle = lit ? (on ? '#ffd98a' : '#000000') : '#5c6369';
+      g.fillRect(x2, y, 5, 5);
+    }
+    return tex(c);
+  }
+  const mat = new THREE.MeshLambertMaterial({map: winTex(false), emissiveMap: winTex(true),
+                                             emissive: 0x000000});
+  CITY_MAT = mat;
+  const N = 900, im = new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1), mat, N);
+  im.castShadow = true; im.frustumCulled = false;
+  const m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), sv = new THREE.Vector3(), pv = new THREE.Vector3();
+  const hl = f.len/2, alongX = f.axis === 'x';
+  let i = 0, guard = 0;
+  while(i < N && guard++ < 20000){
+    const gx = Math.round((Math.random()-0.5)*C.r*2/130)*130 + (Math.random()-0.5)*26;
+    const gz = Math.round((Math.random()-0.5)*C.r*2/130)*130 + (Math.random()-0.5)*26;
+    const wx = f.x + C.cx + gx, wz = f.z + C.cz + gz;
+    if(Math.hypot(gx,gz) > C.r) continue;
+    const rx = wx - f.x, rz = wz - f.z;
+    const al = alongX ? rx : rz, lt = alongX ? rz : rx;
+    if(Math.abs(al) < hl+500 && Math.abs(lt) < 500) continue;      // pist koridoru
+    const dc = Math.hypot(gx,gz)/C.r;
+    const h = 14 + (1-dc)*(1-dc)*78*(0.4+0.6*Math.random());
+    const w = 22 + Math.random()*26, d = 22 + Math.random()*26;
+    const gh = terrainH(wx, wz);
+    q4.setFromAxisAngle(new THREE.Vector3(0,1,0), Math.round(Math.random()*4)*Math.PI/2);
+    sv.set(w, h, d); pv.set(wx, gh + h/2, wz);
+    m4.compose(pv, q4, sv); im.setMatrixAt(i, m4);
+    if(h > 62 && i % 7 === 0) OBST.push({x:wx, z:wz, rx:w/2, rz:d/2, y1:gh+h});
+    i++;
+  }
+  im.count = i; im.instanceMatrix.needsUpdate = true;
+  scene.add(im);
+  MAP.bldg.push([f.x+C.cx-C.r, f.x+C.cx+C.r, f.z+C.cz-C.r, f.z+C.cz+C.r]);
+})();
+
+/* --- asfalt yüzey yüksekliği --- */
+function surfaceH(x,z){
+  const h = terrainH(x,z);
+  if(Math.abs(x) < RW_W/2 && Math.abs(z) < RW_LEN/2) return h + PAVE;
+  for(const r of PAVED)
+    if(x>r[0] && x<r[1] && z>r[2] && z<r[3]) return h + PAVE;
+  return h;
+}
+
+/* --- ağaçlar --- */
 (function(){
   const N = 620;
   const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.4,0.6,4,5),
@@ -517,30 +994,31 @@ const sock = new THREE.Group();
   const crown = new THREE.InstancedMesh(new THREE.ConeGeometry(3.1,9,7),
     new THREE.MeshLambertMaterial({color:0x2f5230}), N);
   crown.castShadow = true;
-  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc3 = new THREE.Vector3(), p = new THREE.Vector3();
   let i=0, guard=0;
-  while(i<N && guard++<9000){
-    const a = Math.random()*Math.PI*2, r = 420 + Math.random()*3200;
+  while(i<N && guard++<12000){
+    const a = Math.random()*Math.PI*2, r = 500 + Math.random()*3400;
     const x = Math.cos(a)*r, z = Math.sin(a)*r;
-    if(Math.abs(x)<260 && Math.abs(z)<RW_LEN/2+260) continue;
+    if(x > -300 && x < 900 && Math.abs(z) < 2000) continue;      // meydan alanı
     const h = terrainH(x,z);
     if(h < 6 || h > 420) continue;
-    const sc2 = 0.6+Math.random()*0.9;
+    const s2 = 0.6+Math.random()*0.9;
     q.setFromAxisAngle(new THREE.Vector3(0,1,0), Math.random()*6.28);
-    s.set(sc2,sc2,sc2);
-    p.set(x, h+2*sc2, z); m.compose(p,q,s); trunk.setMatrixAt(i,m);
-    p.set(x, h+4.5*sc2+2.4*sc2, z); m.compose(p,q,s); crown.setMatrixAt(i,m);
+    sc3.set(s2,s2,s2);
+    p.set(x, h+2*s2, z); m.compose(p,q,sc3); trunk.setMatrixAt(i,m);
+    p.set(x, h+4.5*s2+2.4*s2, z); m.compose(p,q,sc3); crown.setMatrixAt(i,m);
     i++;
   }
   trunk.count = crown.count = i;
   trunk.instanceMatrix.needsUpdate = crown.instanceMatrix.needsUpdate = true;
+  trunk.frustumCulled = crown.frustumCulled = false;
   scene.add(trunk, crown);
 })();
 
 /* =========================================================================
    BULUTLAR
    ========================================================================= */
-const CLOUD_N = 56, CLOUD_SPREAD = 9000;
+const CLOUD_N = 56, CLOUD_SPREAD = 16000;
 const clouds = [];
 (function(){
   const t = cloudTex();
@@ -1288,10 +1766,7 @@ for(const s of [-1,1]){
 
 /* --- göstergeler: üst sıra -15°, alt sıra -23° --- */
 const G = {};
-const GAUGES = [
-  ['asi',-0.680,0.860,0.090], ['ai',-0.480,0.860,0.090], ['alt',-0.280,0.860,0.090],
-  ['tc', -0.680,0.660,0.090], ['hi',-0.480,0.660,0.090], ['vsi',-0.280,0.660,0.090]
-];
+const GAUGES = [ ['ai', -1.005, 0.845, 0.072] ];   // yedek suni ufuk
 for(const [k,gx,gy,r] of GAUGES){
   const o = inst(); G[k]=o;
   const m = new THREE.Mesh(new THREE.CircleGeometry(r,44), new THREE.MeshBasicMaterial({map:o.t}));
@@ -1312,10 +1787,10 @@ const eicas = inst2(512, 384);
 (function(){
   const m = new THREE.Mesh(new THREE.PlaneGeometry(0.34,0.255),
     new THREE.MeshBasicMaterial({map:eicas.t}));
-  m.position.set(0.075, 0.760, PZ+0.036); cockpit.add(m);
+  m.position.set(0.090, 0.760, PZ+0.036); cockpit.add(m);
   const fr = new THREE.Mesh(new THREE.PlaneGeometry(0.365,0.28),
     new THREE.MeshLambertMaterial({color:0x08090b}));
-  fr.position.set(0.075, 0.760, PZ+0.034); cockpit.add(fr);
+  fr.position.set(0.090, 0.760, PZ+0.034); cockpit.add(fr);
 })();
 function drawEICAS(x, engs, fuel, oil, egt, rev){
   const W=512, H=384;
@@ -1370,6 +1845,276 @@ function drawEICAS(x, engs, fuel, oil, egt, rev){
   }
 }
 
+/* --- CAM KOKPİT: PFD ve ND --- */
+const pfd = inst2(512, 400), nd = inst2(512, 400);
+for(const [o, px] of [[pfd,-0.700],[nd,-0.345]]){
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.325,0.254),
+    new THREE.MeshBasicMaterial({map:o.t}));
+  m.position.set(px, 0.760, PZ+0.036); cockpit.add(m);
+  const fr = new THREE.Mesh(new THREE.PlaneGeometry(0.350,0.278),
+    new THREE.MeshLambertMaterial({color:0x08090b}));
+  fr.position.set(px, 0.760, PZ+0.034); cockpit.add(fr);
+}
+const C_SKY='#2f7fc4', C_GND='#8a5a24', C_GRN='#2ee06a', C_MAG='#e46bff',
+      C_AMB='#ffb020', C_WHT='#eef3f6', C_CY='#4fd8ff';
+function box(x, bx,by,bw,bh, fill, stroke){
+  x.fillStyle=fill; x.fillRect(bx,by,bw,bh);
+  if(stroke){ x.strokeStyle=stroke; x.lineWidth=2; x.strokeRect(bx,by,bw,bh); }
+}
+function tx(x,t,px,py,sz,col,al,bold){
+  x.fillStyle=col; x.font=(bold?'bold ':'')+sz+'px ui-monospace, monospace';
+  x.textAlign=al||'center'; x.textBaseline='middle'; x.fillText(t,px,py);
+}
+
+function drawPFD(x, d){
+  const W=512, H=400;
+  x.fillStyle='#05070a'; x.fillRect(0,0,W,H);
+  // ---- FMA ----
+  box(x, 0,0,W,26,'#0a0e12');
+  tx(x, d.at?'SPEED':'', 62, 13, 15, C_GRN);
+  tx(x, d.appr?'LOC':(d.ap?'HDG':''), 176, 13, 15, C_GRN);
+  tx(x, d.appr?'G/S':(d.ap?'ALT':''), 290, 13, 15, C_GRN);
+  tx(x, d.ap?'AP1':'', 404, 13, 15, C_WHT);
+  tx(x, d.at?'A/THR':'', 470, 13, 13, C_WHT);
+  x.strokeStyle='#1d262e'; x.lineWidth=2;
+  for(const bx of [116,236,346,452]){ x.beginPath(); x.moveTo(bx,2); x.lineTo(bx,24); x.stroke(); }
+
+  // ---- suni ufuk ----
+  const AX=110, AY=34, AW=228, AH=250, ACX=AX+AW/2, ACY=AY+AH/2, PPD=4.0;
+  x.save(); x.beginPath(); x.rect(AX,AY,AW,AH); x.clip();
+  x.translate(ACX,ACY); x.rotate(DEG(-d.bank)); x.translate(0, clamp(d.pitch,-90,90)*PPD);
+  x.fillStyle=C_SKY; x.fillRect(-420,-560,840,560);
+  x.fillStyle=C_GND; x.fillRect(-420,0,840,560);
+  x.strokeStyle=C_WHT; x.lineWidth=3; x.beginPath(); x.moveTo(-420,0); x.lineTo(420,0); x.stroke();
+  for(let p=-40;p<=40;p+=5){
+    if(!p) continue;
+    const y=-p*PPD, w=(p%10===0)?52:24;
+    x.strokeStyle=C_WHT; x.lineWidth=2.4;
+    x.beginPath(); x.moveTo(-w,y); x.lineTo(w,y); x.stroke();
+    if(p%10===0){ tx(x,String(Math.abs(p)),-w-16,y,14,C_WHT,'right');
+                  tx(x,String(Math.abs(p)), w+16,y,14,C_WHT,'left'); }
+  }
+  x.restore();
+  // yatış skalası
+  x.save(); x.translate(ACX,ACY);
+  for(const b of [-45,-30,-20,-10,0,10,20,30,45]){
+    x.save(); x.rotate(DEG(b));
+    x.strokeStyle=C_WHT; x.lineWidth=(b?2.2:3.4);
+    x.beginPath(); x.moveTo(0,-AH/2+2); x.lineTo(0,-AH/2+(Math.abs(b)%30===0?14:8)); x.stroke();
+    x.restore();
+  }
+  x.rotate(DEG(-d.bank));
+  x.fillStyle=C_AMB; x.beginPath();
+  x.moveTo(0,-AH/2+16); x.lineTo(-9,-AH/2+30); x.lineTo(9,-AH/2+30); x.closePath(); x.fill();
+  x.restore();
+  // uçak sembolü
+  x.save(); x.translate(ACX,ACY);
+  x.strokeStyle='#0b0d0f'; x.lineWidth=9; x.lineCap='round';
+  x.beginPath(); x.moveTo(-74,0); x.lineTo(-26,0); x.moveTo(26,0); x.lineTo(74,0);
+  x.moveTo(-26,0); x.lineTo(-26,12); x.moveTo(26,0); x.lineTo(26,12); x.stroke();
+  x.strokeStyle=C_AMB; x.lineWidth=5; x.beginPath();
+  x.moveTo(-74,0); x.lineTo(-26,0); x.moveTo(26,0); x.lineTo(74,0);
+  x.moveTo(-26,0); x.lineTo(-26,12); x.moveTo(26,0); x.lineTo(26,12); x.stroke();
+  x.restore();
+  // ILS çubukları
+  if(d.ils && d.ils.live){
+    const ly=AY+AH-14, gx=AX+AW-12;
+    for(let i=-2;i<=2;i++){ if(!i) continue;
+      x.fillStyle=C_WHT; x.beginPath(); x.arc(ACX+i*36,ly,3.5,0,7); x.fill();
+      x.beginPath(); x.arc(gx, ACY+i*40, 3.5,0,7); x.fill(); }
+    x.fillStyle=C_MAG;
+    const lx = ACX + clamp(d.ils.loc/2.5,-1.05,1.05)*72;
+    const gy = ACY - clamp(d.ils.gsd/0.7,-1.05,1.05)*80;
+    x.beginPath(); x.moveTo(lx,ly-8); x.lineTo(lx+8,ly); x.lineTo(lx,ly+8); x.lineTo(lx-8,ly); x.fill();
+    x.beginPath(); x.moveTo(gx,gy-8); x.lineTo(gx+8,gy); x.lineTo(gx,gy+8); x.lineTo(gx-8,gy); x.fill();
+  }
+  // radyo altimetre
+  if(d.agl < 2500 && !d.ground){
+    const ra = d.agl<100 ? Math.round(d.agl/2)*2 : Math.round(d.agl/10)*10;
+    tx(x, String(ra), ACX, AY+AH-42, 26, d.agl<220?'#ff6a52':C_GRN, 'center', true);
+  }
+
+  // ---- hız şeridi ----
+  const SX=14, SY=34, SW=84, SH=250, SCY=SY+SH/2, PPK=3.4;
+  box(x, SX,SY,SW,SH,'rgba(10,14,18,0.85)');
+  x.save(); x.beginPath(); x.rect(SX,SY,SW,SH); x.clip();
+  for(let v=Math.floor((d.kt-45)/10)*10; v<=d.kt+45; v+=10){
+    if(v<0) continue;
+    const y=SCY+(d.kt-v)*PPK;
+    x.strokeStyle=C_WHT; x.lineWidth=2;
+    x.beginPath(); x.moveTo(SX+SW-14,y); x.lineTo(SX+SW,y); x.stroke();
+    if(v%20===0) tx(x,String(v),SX+SW-20,y,17,C_WHT,'right');
+  }
+  // hız aralıkları
+  x.fillStyle=C_AMB; x.fillRect(SX+SW-6, SCY+(d.kt-d.vls)*PPK, 6, SH);
+  x.fillStyle='#e0392b'; x.fillRect(SX+SW-6, SY, 6, Math.max(SCY+(d.kt-340)*PPK-SY,0));
+  x.restore();
+  x.strokeStyle='#39424a'; x.lineWidth=2; x.strokeRect(SX,SY,SW,SH);
+  box(x, SX-2,SCY-19,SW+8,38,'#05070a',C_WHT);
+  tx(x, String(Math.round(d.kt)), SX+SW-6, SCY, 26, C_GRN,'right',true);
+  if(d.at) tx(x, String(Math.round(d.spdTgt)), SX+SW/2, SY-12, 17, C_MAG);
+  tx(x,'M '+d.mach.toFixed(2), SX+SW/2, SY+SH+16, 15, C_GRN);
+
+  // ---- irtifa şeridi ----
+  const AX2=352, AW2=92, PPF=0.30;
+  box(x, AX2,SY,AW2,SH,'rgba(10,14,18,0.85)');
+  x.save(); x.beginPath(); x.rect(AX2,SY,AW2,SH); x.clip();
+  for(let v=Math.floor((d.alt-450)/100)*100; v<=d.alt+450; v+=100){
+    const y=SCY+(d.alt-v)*PPF;
+    x.strokeStyle=C_WHT; x.lineWidth=2;
+    x.beginPath(); x.moveTo(AX2,y); x.lineTo(AX2+12,y); x.stroke();
+    if(v%500===0) tx(x, String(v), AX2+18, y, 16, C_WHT,'left');
+  }
+  if(d.ap){ const y=SCY+(d.alt-d.altTgt)*PPF;
+    x.strokeStyle=C_MAG; x.lineWidth=3;
+    x.beginPath(); x.moveTo(AX2,y-8); x.lineTo(AX2+AW2,y-8); x.lineTo(AX2+AW2,y+8);
+    x.lineTo(AX2,y+8); x.stroke(); }
+  // yer çizgisi
+  const gy2 = SCY+(d.alt-d.fieldAlt)*PPF;
+  x.fillStyle=C_AMB; x.fillRect(AX2, gy2, AW2, 4);
+  x.restore();
+  x.strokeStyle='#39424a'; x.lineWidth=2; x.strokeRect(AX2,SY,AW2,SH);
+  box(x, AX2-4,SCY-19,AW2+8,38,'#05070a',C_WHT);
+  tx(x, String(Math.round(d.alt/10)*10), AX2+AW2-4, SCY, 24, C_GRN,'right',true);
+  if(d.ap) tx(x, String(d.altTgt), AX2+AW2/2, SY-12, 17, C_MAG);
+
+  // ---- dikey hız ----
+  const VX=456, VW=48;
+  box(x, VX,SY,VW,SH,'rgba(10,14,18,0.7)');
+  const vmap = v => { const a=Math.abs(v); const f = a<=1000 ? a/1000*0.5 : 0.5+clamp((a-1000)/5000,0,1)*0.5;
+                      return SCY - Math.sign(v)*f*(SH/2-10); };
+  for(const v of [-6000,-2000,-1000,0,1000,2000,6000]){
+    const y=vmap(v); x.strokeStyle='#5a646c'; x.lineWidth=2;
+    x.beginPath(); x.moveTo(VX,y); x.lineTo(VX+(Math.abs(v)>=1000?14:9),y); x.stroke();
+  }
+  x.strokeStyle=C_GRN; x.lineWidth=3.5;
+  x.beginPath(); x.moveTo(VX+VW-4, SCY); x.lineTo(VX+2, vmap(d.vs)); x.stroke();
+  if(Math.abs(d.vs)>150) tx(x, String(Math.round(d.vs/100)), VX+VW/2, vmap(d.vs)+(d.vs>0?-14:14), 14, C_GRN);
+
+  // ---- istikamet şeridi ----
+  const HY=300, HH=44;
+  box(x, SX,HY,AX2+AW2-SX,HH,'rgba(10,14,18,0.85)','#39424a');
+  const HCX=(SX+AX2+AW2)/2, PPD2=2.4;
+  x.save(); x.beginPath(); x.rect(SX+2,HY,AX2+AW2-SX-4,HH); x.clip();
+  for(let dg=Math.floor((d.hdg-70)/5)*5; dg<=d.hdg+70; dg+=5){
+    const hx=HCX+(dg-d.hdg)*PPD2, v=((dg%360)+360)%360;
+    x.strokeStyle=C_WHT; x.lineWidth=2;
+    x.beginPath(); x.moveTo(hx,HY); x.lineTo(hx,HY+(v%10===0?12:7)); x.stroke();
+    if(v%10===0) tx(x, v%90===0 ? ['N','E','S','W'][v/90] : String(v/10), hx, HY+26, 16, C_WHT);
+  }
+  if(d.ap){ const hx=HCX+(((d.hdgTgt-d.hdg+540)%360)-180)*PPD2;
+    x.fillStyle=C_MAG; x.beginPath();
+    x.moveTo(hx,HY+HH); x.lineTo(hx-8,HY+HH+10); x.lineTo(hx+8,HY+HH+10); x.closePath(); x.fill(); }
+  x.restore();
+  x.fillStyle=C_AMB; x.beginPath();
+  x.moveTo(HCX,HY-2); x.lineTo(HCX-8,HY-14); x.lineTo(HCX+8,HY-14); x.closePath(); x.fill();
+  box(x, HCX-34,HY+HH+2,68,26,'#05070a',C_WHT);
+  tx(x, String(Math.round(d.hdg)).padStart(3,'0'), HCX, HY+HH+15, 18, C_GRN,'center',true);
+  // uyarılar
+  if(d.stall>0.25 && Math.floor(performance.now()/280)%2===0)
+    tx(x,'STALL', ACX, AY+40, 26, '#ff3a24','center',true);
+}
+
+function drawND(x, d){
+  const W=512, H=400, CX=256, CY=336, R=272;
+  x.fillStyle='#05070a'; x.fillRect(0,0,W,H);
+  const rngM = d.range*1852, sc = R/rngM;
+  x.save(); x.beginPath(); x.rect(0,26,W,H-26); x.clip();
+  // menzil halkaları
+  x.strokeStyle='#2a343d'; x.lineWidth=2; x.setLineDash([6,7]);
+  for(const f of [0.5,0.75]){ x.beginPath(); x.arc(CX,CY,R*f,DEG(-160),DEG(-20)); x.stroke(); }
+  x.setLineDash([]);
+  // pusula yayı
+  x.strokeStyle='#7d878e'; x.lineWidth=2.5;
+  x.beginPath(); x.arc(CX,CY,R,DEG(-160),DEG(-20)); x.stroke();
+  for(let dg=0; dg<360; dg+=5){
+    let rel=((dg-d.hdg+540)%360)-180;
+    if(Math.abs(rel)>72) continue;
+    const a=DEG(rel-90), big=dg%10===0;
+    const x1=CX+Math.cos(a)*R, y1=CY+Math.sin(a)*R;
+    const x2=CX+Math.cos(a)*(R-(big?14:8)), y2=CY+Math.sin(a)*(R-(big?14:8));
+    x.strokeStyle=C_WHT; x.lineWidth=big?2.4:1.6;
+    x.beginPath(); x.moveTo(x1,y1); x.lineTo(x2,y2); x.stroke();
+    if(dg%30===0){
+      const lx=CX+Math.cos(a)*(R-32), ly=CY+Math.sin(a)*(R-32);
+      tx(x, dg%90===0?['N','E','S','W'][dg/90]:String(dg/10), lx,ly,16,C_WHT);
+    }
+  }
+  // pist ve ILS hattı
+  function proj(wx,wz){
+    const rx = wx - d.px, rz = wz - d.pz;
+    const h = DEG(d.hdg);
+    const f = rx*Math.sin(h) - rz*Math.cos(h);
+    const r2 = rx*Math.cos(h) + rz*Math.sin(h);
+    return [CX + r2*sc, CY - f*sc];
+  }
+  if(sc > 0.012){                                   // yakın menzilde yer detayı
+    x.fillStyle='#1d2831';
+    for(const b of MAP.bldg){
+      const [q1,w1]=proj(b[0],b[2]), [q2,w2]=proj(b[1],b[2]),
+            [q3,w3]=proj(b[1],b[3]), [q4,w4]=proj(b[0],b[3]);
+      x.beginPath(); x.moveTo(q1,w1); x.lineTo(q2,w2); x.lineTo(q3,w3); x.lineTo(q4,w4);
+      x.closePath(); x.fill();
+    }
+    x.strokeStyle='#5c6a75'; x.lineCap='round';
+    for(const t of MAP.taxi){
+      const [q1,w1]=proj(t[0],t[1]), [q2,w2]=proj(t[2],t[3]);
+      x.lineWidth = Math.max(t[4]*sc, 2);
+      x.beginPath(); x.moveTo(q1,w1); x.lineTo(q2,w2); x.stroke();
+    }
+    x.lineCap='butt';
+    for(const st of MAP.stands){
+      const [q,w]=proj(st.x,st.z);
+      x.fillStyle=C_CY; x.beginPath(); x.arc(q,w,4,0,7); x.fill();
+      tx(x, st.n, q+10, w, 13, C_CY,'left');
+    }
+  }
+  for(const f of FIELDS){
+    const hl = f.len/2;
+    const p1 = f.axis==='z' ? proj(f.x, f.z+hl) : proj(f.x+hl, f.z);
+    const p2 = f.axis==='z' ? proj(f.x, f.z-hl) : proj(f.x-hl, f.z);
+    x.strokeStyle='#c8d0d6'; x.lineWidth=Math.max(f.w*sc, 3);
+    x.beginPath(); x.moveTo(p1[0],p1[1]); x.lineTo(p2[0],p2[1]); x.stroke();
+    const mx=(p1[0]+p2[0])/2, my=(p1[1]+p2[1])/2;
+    tx(x, f.id, mx+14, my-8, 14, '#c8d0d6','left');
+    if(f.name) tx(x, f.name, mx+14, my+7, 11, '#8d979e','left');
+  }
+  const L = ILS_LIST[ilsI], hh = DEG(L.hdg);
+  const [ax,ay] = proj(L.tx, L.tz);
+  const [ex,ey] = proj(L.tx - Math.sin(hh)*32000, L.tz + Math.cos(hh)*32000);
+  x.strokeStyle=C_MAG; x.lineWidth=2.5; x.setLineDash([10,8]);
+  x.beginPath(); x.moveTo(ax,ay); x.lineTo(ex,ey); x.stroke(); x.setLineDash([]);
+  x.fillStyle=C_MAG; x.beginPath(); x.arc(ax,ay,5,0,7); x.fill();
+  tx(x, L.name, ax+14, ay+14, 15, C_MAG,'left');
+  // rota çizgisi
+  x.strokeStyle=C_GRN; x.lineWidth=2; x.setLineDash([8,6]);
+  x.beginPath(); x.moveTo(CX,CY); x.lineTo(CX,CY-R); x.stroke(); x.setLineDash([]);
+  x.restore();
+  // uçak sembolü
+  x.strokeStyle=C_WHT; x.lineWidth=3.5;
+  x.beginPath(); x.moveTo(CX,CY-16); x.lineTo(CX,CY+16);
+  x.moveTo(CX-16,CY); x.lineTo(CX+16,CY);
+  x.moveTo(CX-8,CY+12); x.lineTo(CX+8,CY+12); x.stroke();
+  // üst bilgi
+  box(x,0,0,W,26,'#0a0e12');
+  tx(x,'GS '+Math.round(d.gs), 10, 13, 15, C_WHT,'left');
+  tx(x,'TAS '+Math.round(d.tas), 108, 13, 15, C_WHT,'left');
+  tx(x, d.range+' NM', W-10, 13, 15, C_CY,'right');
+  tx(x,'ARC', W-92, 13, 14, C_WHT,'right');
+  // rüzgâr
+  const wa = DEG(d.windDir - d.hdg + 180);
+  x.save(); x.translate(46, 62); x.rotate(wa);
+  x.strokeStyle=C_GRN; x.lineWidth=3;
+  x.beginPath(); x.moveTo(0,-18); x.lineTo(0,18);
+  x.moveTo(0,18); x.lineTo(-6,9); x.moveTo(0,18); x.lineTo(6,9); x.stroke();
+  x.restore();
+  tx(x, Math.round(d.windDir)+'° / '+Math.round(d.windKt), 70, 62, 15, C_GRN,'left');
+  // sapma
+  if(d.ils && d.ils.live){
+    tx(x, (Math.round(d.ils.d/185.2)/10)+' NM', W-10, 46, 16, C_MAG,'right');
+  }
+}
+
 /* --- CDU / radyo --- */
 const radio = inst();
 (function(){
@@ -1393,7 +2138,7 @@ const radio = inst();
   radio.t.needsUpdate = true;
   const m = new THREE.Mesh(new THREE.PlaneGeometry(0.30,0.40),
     new THREE.MeshBasicMaterial({map:radio.t}));
-  m.position.set(0.32,0.76,PZ+0.036); cockpit.add(m);
+  m.position.set(0.44,0.76,PZ+0.036); cockpit.add(m);
 })();
 
 /* --- yardımcı pilot paneli (dolgu) --- */
@@ -1411,7 +2156,7 @@ const radio = inst();
   }
   const m = new THREE.Mesh(new THREE.PlaneGeometry(0.56,0.28),
     new THREE.MeshBasicMaterial({map:tex(c)}));
-  m.position.set(0.72,0.76,PZ+0.036); cockpit.add(m);
+  m.position.set(0.86,0.76,PZ+0.036); cockpit.add(m);
 })();
 
 /* --- künye --- */
@@ -1422,9 +2167,9 @@ const radio = inst();
   x.fillStyle='#ffb020'; x.font='bold 36px ui-monospace, monospace';
   x.textAlign='center'; x.textBaseline='middle'; x.fillText('TURKISH  AIRLINES', 256, 50);
   x.fillStyle='#7d878e'; x.font='22px ui-monospace, monospace'; x.fillText('TC-ECO  ·  A380-800', 256, 90);
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.34,0.064),
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.19,0.036),
     new THREE.MeshBasicMaterial({map:tex(c)}));
-  m.position.set(-0.48,0.962,PZ+0.037); cockpit.add(m);
+  m.position.set(-1.005,0.955,PZ+0.037); cockpit.add(m);
 })();
 
 /* --- ikaz lambaları (güneşliğin altında) --- */
@@ -1520,7 +2265,7 @@ const F = {
         {n1:0,fail:false,fire:0},{n1:0,fail:false,fire:0}],
   asym:0,
   flap:0, gearDown:true, gearPos:1, brake:false,
-  spoilerCmd:0, spoiler:0, spArmed:false, revCmd:false, rev:0,
+  spoilerCmd:0, spoiler:0, spArmed:false, revCmd:false, rev:0, park:true, push:0,
   comp:GEAR_STATIC, compV:0, lts:{land:false, strobe:false},
   fuel:1, oil:0.2, egt:0.1,
   ground:true, crashed:false, aoa:0, slip:0, gLoad:1, stall:0, buffet:0, trimA:0.02, tas:0, agl:0,
@@ -1531,10 +2276,19 @@ const _fwd=new THREE.Vector3(), _up=new THREE.Vector3(), _rt=new THREE.Vector3()
       _f=new THREE.Vector3(), _tmp=new THREE.Vector3(), _ld=new THREE.Vector3(), _air=new THREE.Vector3(),
       _UPV=new THREE.Vector3(0,1,0);
 
-function resetPlane(){
-  F.pos.set(0, terrainH(0,1400)+GEAR_H, 1400);
+function resetPlane(mode){
+  if(mode === 'rwy'){
+    F.pos.set(0, surfaceH(0,1450)+GEAR_H, 1450);
+    F.quat.identity();
+    F.park = false; PROC.i = 3; PROC.pushDone = true;
+  } else {
+    const st = STANDS[1];
+    F.pos.set(st.x, surfaceH(st.x, st.z)+GEAR_H, st.z);
+    F.quat.setFromEuler(new THREE.Euler(0, -DEG(90), 0, 'YXZ'));
+    F.park = true; PROC.i = 0; PROC.pushDone = false;
+  }
+  F.push = 0; PROC.revUsed = false;
   F.vel.set(0,0,0); F.om.set(0,0,0);
-  F.quat.identity();
   F.thr=0; F.thrTgt=0; F.n1 = F.eng?22:0;
   for(const E of F.engs){ E.n1 = F.eng?22:0; E.fail=false; E.fire=0; }
   F.asym=0;
@@ -1546,7 +2300,7 @@ function resetPlane(){
   F.pitchIn=F.rollIn=F.yawIn=0; F.buffet=0; F.trimA=0.02;
   resetCallouts();
   look.set(0,0); lookT.set(0,0);
-  toast('PİST BAŞINA DÖNÜLDÜ · RWY 36');
+  toast(mode==='rwy' ? 'PİST BAŞI · RWY 36' : 'KAPI A2 · LTFJ');
 }
 function getEuler(){ return _e.setFromQuaternion(F.quat,'YXZ').clone(); }
 
@@ -1609,7 +2363,7 @@ function physics(dt){
     else                  tgt = 0;
     E.n1 = damp(E.n1, tgt, E.fail ? 1.4 : (F.starting>0?1.1:0.62), dt);
     if(E.fire>0) E.fire = Math.max(E.fire - dt*0.06, 0);
-    const pw = E.fail ? 0 : clamp((E.n1-21)/79, 0, 1.05);
+    const pw = E.fail ? 0 : clamp((E.n1-12)/88, 0, 1.05);   // rölantide hafif itki
     const th = (MAXT/4)*pw*Math.pow(rho/1.225,0.85)*(1-0.22*clamp(V/250,0,1.1))*(1-1.42*F.rev);
     tSum += th; mSum += th*ENG_X[i]; n1Sum += E.n1; power += pw*0.25;
     if(E.fail) failed++;
@@ -1620,7 +2374,7 @@ function physics(dt){
   F.oil = damp(F.oil, F.eng ? 0.40+power*0.36 : 0.14, 0.10, dt);
   F.egt = damp(F.egt, F.eng ? 0.22+power*0.62 : 0.04, 0.30, dt);
   _f.addScaledVector(_fwd, Math.max(tSum,0));
-  _f.y -= MASS*GRAV;
+  _f.y -= (MASS - (1-F.fuel)*95000)*GRAV;
 
   F.gLoad = damp(F.gLoad, V>6 ? clamp(qd*SREF*cl/(MASS*GRAV),-3,6) : 1, 8, dt);
 
@@ -1641,11 +2395,12 @@ function physics(dt){
   }
 
   /* --- entegrasyon --- */
-  F.vel.addScaledVector(_f, dt/MASS);
+  const mNow = MASS - (1-F.fuel)*95000;         // yakıt yandıkça hafifler
+  F.vel.addScaledVector(_f, dt/mNow);
   F.pos.addScaledVector(F.vel, dt);
 
   /* --- zemin --- */
-  const gh = terrainH(F.pos.x, F.pos.z);
+  const gh = surfaceH(F.pos.x, F.pos.z);
   const pit0 = getEuler().x;
   const legH = GEAR_H*F.gearPos + (1-F.gearPos)*4.30;
   // temas noktası ana takımlar: burun kalkarken uçak tekerlek etrafında döner
@@ -1660,8 +2415,7 @@ function physics(dt){
         crash(!F.gearDown ? 'İNİŞ TAKIMI KAPALI' : overWater ? 'SUYA İNİŞ' :
               vy<-5.0 ? 'SERT İNİŞ' : bank>8 ? 'KANAT ÇARPMASI' : 'PİST DIŞI');
       } else {
-        toast(vy<-2.0 ? 'SERT AMA SAĞLAM İNİŞ · '+Math.round(-vy*197)+' FPM'
-                      : 'YUMUŞAK İNİŞ · '+Math.round(-vy*197)+' FPM');
+        landingScore(vy, bank);
       }
       F.compV = Math.min(-vy*1.15, 6);      // tekerlek darbesi
       if(hs > 30) smokeBurst();
@@ -1674,13 +2428,22 @@ function physics(dt){
     const rotAuth = clamp((hs-58)/26,0,1);
     const gp = clamp(F.pitchIn*DEG(12)*rotAuth, DEG(-0.8), DEG(12));
     const pit = damp(e.x, gp, 1.6, dt);
+    // burun tekeri direksiyonu: düşük hızda kuvvetli, yüksek hızda zayıf
+    const steer = 0.38*clamp(hs/7,0,1)*(1 - clamp((hs-25)/55,0,0.78));
     _e.set(pit,
-           e.y + (F.yawIn*clamp(hs/55,0,1)*0.12 + F.asym*1.1e-8*clamp(hs/40,0,1))*dt*(hs>0.5?1:0),
+           e.y + (F.yawIn*steer + F.asym*1.1e-8*clamp(hs/40,0,1))*dt*(hs>0.4?1:0),
            damp(e.z, 0, 3.5, dt), 'YXZ');
     q.setFromEuler(_e);
     // gövde, ana tekerlekler piste değecek şekilde oturtulur
     F.pos.y = gh + Math.max(legH,4.30)*Math.cos(pit) + MAIN_Z*Math.sin(Math.max(pit,0));
 
+    // park freni ve geri itme
+    if(F.park){ F.vel.x = 0; F.vel.z = 0; F.push = 0; }
+    else if(F.push > 0){
+      F.push -= 2.4*dt;
+      F.vel.x = -_fwd.x*2.4; F.vel.z = -_fwd.z*2.4;
+      if(F.push <= 0){ F.push = 0; PROC.pushDone = true; toast('GERİ İTME TAMAM'); }
+    }
     // yuvarlanma sürtünmesi (sabit yavaşlama) + fren
     const mu = F.brake ? 0.38 : 0.018;
     if(hs > 0.05){
@@ -1711,8 +2474,48 @@ function physics(dt){
   const revOk = F.ground && F.eng && Math.hypot(F.vel.x,F.vel.z) > 8;
   F.rev = damp(F.rev, (F.revCmd && revOk) ? 1 : 0, 2.4, dt);
 
+  // engel çarpışması (terminal, kule, hangar)
+  if(!F.crashed){
+    for(const o of OBST){
+      if(F.pos.y > o.y1 + 6) continue;
+      if(Math.abs(F.pos.x-o.x) < o.rx+14 && Math.abs(F.pos.z-o.z) < o.rz+14){
+        crash('ENGELE ÇARPTI'); break;
+      }
+    }
+  }
+
   const rough = F.ground ? clamp(Math.hypot(F.vel.x,F.vel.z)/110,0,1)*0.45 : 0;
   F.buffet = damp(F.buffet, over*1.0 + rough + (F.ground?0:turbI*0.55), 8, dt);
+}
+
+/* --- iniş notu --- */
+let landMsgT = 0;
+function landingScore(vy, bank){
+  let f = FIELDS[0], best = 1e18;
+  for(const q of FIELDS){ const d = Math.hypot(F.pos.x-q.x, F.pos.z-q.z);
+    if(d < best){ best = d; f = q; } }
+  const along = f.axis==='z' ? F.pos.z - f.z : F.pos.x - f.x;
+  const vAl   = f.axis==='z' ? F.vel.z : F.vel.x;
+  const lat   = Math.abs(f.axis==='z' ? F.pos.x - f.x : F.pos.z - f.z);
+  const dir   = vAl < 0 ? -1 : 1;
+  const fromThr = dir*along + f.len/2;
+  const fpm = Math.abs(vy*196.85);
+  const onRwy = lat < f.w/2 + 6 && fromThr > -60 && fromThr < f.len+60;
+
+  let sc = 100;
+  sc -= clamp((fpm-120)/8, 0, 40);
+  sc -= clamp((lat-4)/1.2, 0, 25);
+  sc -= clamp((Math.abs(fromThr-450)-250)/26, 0, 25);
+  sc -= clamp((Math.abs(bank)-1.5)*5, 0, 15);
+  if(!onRwy) sc -= 45;
+  sc = Math.round(clamp(sc, 0, 100));
+  const g = sc>=92?'A':sc>=82?'B':sc>=70?'C':sc>=58?'D':'E';
+  msg('İNİŞ NOTU  '+g+'   ('+sc+'/100)',
+      (onRwy ? f.id+' '+f.rwy : 'PİST DIŞI')+' · '+fpm.toFixed(0)+' FPM · merkez '
+      + lat.toFixed(0)+' m · eşikten '+Math.round(fromThr)+' m · yatış '
+      + Math.abs(bank).toFixed(1)+'°');
+  landMsgT = 9;
+  toast('İNİŞ '+g);
 }
 
 function crash(reason){
@@ -1756,15 +2559,43 @@ function updateWind(dt, alt){
 /* =========================================================================
    ILS 36 + OTOPİLOT
    ========================================================================= */
-const ILS = { tdz: 1300, elev: FIELD_ELEV, hdg: 360, gs: 3.0 };
+const ILS_LIST = [];
+for(const f of FIELDS){
+  const hl = f.len/2 - 300, e = f.elev + PAVE;
+  if(f.axis === 'z'){
+    ILS_LIST.push({name:f.id+' 36', tx:f.x, tz:f.z+hl, elev:e, hdg:360, f:f});
+    ILS_LIST.push({name:f.id+' 18', tx:f.x, tz:f.z-hl, elev:e, hdg:180, f:f});
+  } else {
+    ILS_LIST.push({name:f.id+' 27', tx:f.x+hl, tz:f.z, elev:e, hdg:270, f:f});
+    ILS_LIST.push({name:f.id+' 09', tx:f.x-hl, tz:f.z, elev:e, hdg: 90, f:f});
+  }
+}
+function selectBestILS(){
+  let best = ilsI, bs = 1e18;
+  const hn = (RAD(Math.atan2(_fwd.x, -_fwd.z))+360)%360;
+  for(let i=0;i<ILS_LIST.length;i++){
+    const L = ILS_LIST[i];
+    const d = Math.hypot(F.pos.x-L.tx, F.pos.z-L.tz);
+    const he = Math.abs(((L.hdg-hn+540)%360)-180);
+    const sc = d + he*500;
+    if(sc < bs){ bs = sc; best = i; }
+  }
+  ilsI = best;
+}
+let ilsI = 0;
+const ILS = { gs: 3.0, get name(){return ILS_LIST[ilsI].name;}, get hdg(){return ILS_LIST[ilsI].hdg;} };
 function ilsData(){
-  const d = F.pos.z - ILS.tdz;                       // eşiğe kalan mesafe (m)
-  if(d < -600 || d > 46000) return null;
+  const L = ILS_LIST[ilsI];
+  const h = DEG(L.hdg), fx = Math.sin(h), fz = -Math.cos(h);   // iniş yönü
+  const rx = F.pos.x - L.tx, rz = F.pos.z - L.tz;
+  const d = -(rx*fx + rz*fz);                        // eşiğe kalan mesafe
+  if(d < -800 || d > 60000) return null;
+  const lat = rx*Math.cos(h) + rz*Math.sin(h);       // sağa sapma (m)
   const dd = Math.max(d, 60);
-  const loc = RAD(Math.atan2(F.pos.x, dd));          // ° · sağa sapma pozitif
-  const gsIdeal = ILS.elev + Math.tan(DEG(ILS.gs))*Math.max(d,0);
-  const gsd = RAD(Math.atan2(F.pos.y - gsIdeal, dd));// ° · yukarıda pozitif
-  return { d, loc, gsd, gsIdeal, live: Math.abs(loc)<12 && d>-400 };
+  const loc = RAD(Math.atan2(lat, dd));
+  const gsIdeal = L.elev + Math.tan(DEG(ILS.gs))*Math.max(d,0);
+  const gsd = RAD(Math.atan2(F.pos.y - gsIdeal, dd));
+  return { d, loc, gsd, gsIdeal, live: Math.abs(loc)<12 && d>-500 };
 }
 
 const AP = { on:false, at:false, appr:false, hdg:360, alt:5000, spd:250 };
@@ -1801,6 +2632,91 @@ function autopilot(dt, e, hdg, kt){
     const se = AP.spd - kt;
     F.thrTgt = clamp(F.thrTgt + clamp(se,-40,40)*0.0022*dt*60, 0, 1);
   }
+}
+
+/* =========================================================================
+   STANDART UÇUŞ PROSEDÜRÜ — kapıdan kapıya kontrol listesi
+   ========================================================================= */
+const PROC = { i:0, pushDone:false, revUsed:false, atStand:false, sig:'' };
+const _kt  = ()=>F.tas*1.94384;
+const _gsK = ()=>Math.hypot(F.vel.x,F.vel.z)*1.94384;
+const _ft  = ()=>F.pos.y*3.28084;
+PROC.phases = [
+{ id:'gate', n:'1 · KAPIDA', h:'Park freni çekili. ENTER ile motorları çalıştır.',
+  it:[['Park freni: ÇEKİLİ', ()=>F.park],
+      ['Flap: 0',            ()=>F.flap===0],
+      ['İniş takımı: AÇIK',  ()=>F.gearDown],
+      ['Motorlar: ÇALIŞIR',  ()=>F.eng && F.n1>20]],
+  ok:()=>F.eng && F.n1>20 },
+{ id:'push', n:'2 · GERİ İTME', h:'Y ile park frenini bırak, U ile geri itmeyi başlat.',
+  it:[['Park freni: BIRAK', ()=>!F.park],
+      ['Geri itme: TAMAM',  ()=>PROC.pushDone]],
+  ok:()=>PROC.pushDone && !F.park },
+{ id:'taxi', n:'3 · TAKSİ', h:'A1 bekleme noktasına ilerle, sonra piste hizalan.',
+  it:[['Flap: KALKIŞ (2)',      ()=>F.flap>=2],
+      ['Farlar: AÇIK (L)',      ()=>F.lts.land],
+      ['Yer spoyleri: KURULU',  ()=>F.spArmed],
+      ['Pist 36 hattında',      ()=>Math.abs(F.pos.x)<28 && Math.abs(F.pos.z)<RW_LEN/2]],
+  ok:()=>Math.abs(F.pos.x)<28 && Math.abs(F.pos.z)<RW_LEN/2 && F.flap>=2 },
+{ id:'to', n:'4 · KALKIŞ', h:'İtkiyi aç. 165 kt (ROTATE) anonsunda burnu kaldır.',
+  it:[['İtki: KALKIŞ',   ()=>F.thr>0.85],
+      ['V1 geçildi',     ()=>_kt()>150],
+      ['Havalandı',      ()=>!F.ground]],
+  ok:()=>!F.ground && F.agl>80 },
+{ id:'climb', n:'5 · TIRMANMA', h:'Takımı topla, hız 220 kt üstünde flapları al.',
+  it:[['İniş takımı: KAPALI', ()=>!F.gearDown],
+      ['Flap: 0',             ()=>F.flap===0],
+      ['10.000 ft',           ()=>_ft()>10000]],
+  ok:()=>_ft()>10000 && !F.gearDown && F.flap===0 },
+{ id:'cruise', n:'6 · SEYİR', h:'1 otopilot, 3 oto gaz. Seyir irtifasına çık.',
+  it:[['Otopilot: AÇIK',  ()=>AP.on],
+      ['Oto gaz: AÇIK',   ()=>AP.at],
+      ['20.000 ft üstü',  ()=>_ft()>20000]],
+  ok:()=>_ft()>20000 },
+{ id:'desc', n:'7 · ALÇALMA', h:'Pistin güneyine dön (~20 NM), 4 ile ILS 36 kur.',
+  it:[['ILS 36: KURULU',   ()=>AP.appr],
+      ['10.000 ft altı',   ()=>_ft()<10000],
+      ['Hız 240 kt altı',  ()=>_kt()<240]],
+  ok:()=>AP.appr && _ft()<8000 },
+{ id:'app', n:'8 · YAKLAŞMA', h:'Flap indir, takımı aç, süzülüş hattını yakala.',
+  it:[['Flap: İNİŞ (4+)',    ()=>F.flap>=4],
+      ['İniş takımı: AÇIK',  ()=>F.gearDown],
+      ['Yer spoyleri: KURULU',()=>F.spArmed],
+      ['Süzülüşte',          ()=>{const i=ilsData(); return !!(i&&i.live&&Math.abs(i.gsd)<0.7);}]],
+  ok:()=>F.ground },
+{ id:'land', n:'9 · İNİŞ', h:'Z ile ters itki, B ile fren. 40 kt altında pisti terk et.',
+  it:[['Temas',            ()=>F.ground],
+      ['Ters itki: VERİLDİ',()=>PROC.revUsed],
+      ['Hız 40 kt altı',   ()=>_gsK()<40]],
+  ok:()=>F.ground && _gsK()<40 },
+{ id:'in', n:'10 · TAKSİ / PARK', h:'Aprona dön, park pozisyonuna gir, Y ile fren, ENTER ile motorları kapat.',
+  it:[['Pist terk edildi',  ()=>Math.abs(F.pos.x)>95],
+      ['Park pozisyonunda', ()=>PROC.atStand],
+      ['Park freni: ÇEKİLİ',()=>F.park],
+      ['Motorlar: KAPALI',  ()=>!F.eng]],
+  ok:()=>PROC.atStand && F.park && !F.eng },
+{ id:'done', n:'UÇUŞ TAMAMLANDI', h:'R ile kapıya dön, T ile pist başına geç.',
+  it:[], ok:()=>false }
+];
+function procUpdate(){
+  const ph = PROC.phases[PROC.i];
+  if(F.rev > 0.5) PROC.revUsed = true;
+  PROC.atStand = STANDS.some(st => Math.abs(F.pos.x-st.x)<30 && Math.abs(F.pos.z-st.z)<30)
+                 && _gsK() < 2;
+  if(ph.ok && ph.ok() && PROC.i < PROC.phases.length-1){
+    PROC.i++;
+    const nx = PROC.phases[PROC.i];
+    toast(nx.n);
+    if(nx.id==='done'){ say('flight complete'); }
+  }
+  // panel
+  let html = '<h4>'+ph.n+'</h4>';
+  for(const [t,f] of ph.it){
+    const done = f();
+    html += '<div class="ci'+(done?' ok':'')+'">'+(done?'✔':'○')+' '+t+'</div>';
+  }
+  html += '<div class="ch">'+ph.h+'</div>';
+  if(html !== PROC.sig){ PROC.sig = html; procEl.innerHTML = html; }
 }
 
 /* =========================================================================
@@ -1930,7 +2846,7 @@ const sfx = {
 const K = {};
 const look = new THREE.Vector2(), lookT = new THREE.Vector2();
 let view = 0, orbit = 0;
-const VIEWS = ['KOKPİT','TAKİP','DIŞ'];
+const VIEWS = ['KOKPİT','TAKİP','DIŞ','TAKSİ'];
 
 addEventListener('keydown', e=>{
   if(e.repeat){ K[e.code]=true; return; }
@@ -1949,8 +2865,17 @@ addEventListener('keydown', e=>{
       F.flap = (F.flap+1)%FLAP_SET.length; sfx.click();
       toast('FLAP '+FLAP_SET[F.flap]+'°'); break;
     case 'KeyC':
-      view = (view+1)%3; sfx.click(); setView(); break;
-    case 'KeyR': msg(null); resetPlane(); break;
+      view = (view+1)%4; sfx.click(); setView(); break;
+    case 'KeyR': msg(null); resetPlane('gate'); break;
+    case 'KeyT': msg(null); resetPlane('rwy'); break;
+    case 'KeyY':
+      if(!F.ground){ toast('PARK FRENİ SADECE YERDE'); break; }
+      F.park = !F.park; sfx.click();
+      toast('PARK FRENİ '+(F.park?'ÇEKİLDİ':'BIRAKILDI')); break;
+    case 'KeyU':
+      if(!F.ground || F.park){ toast('ÖNCE PARK FRENİNİ BIRAK'); break; }
+      if(PROC.pushDone){ toast('GERİ İTME ZATEN YAPILDI'); break; }
+      F.push = 95; sfx.click(); toast('GERİ İTME BAŞLADI'); break;
     case 'KeyH':
       help.classList.toggle('hidden');
       hint.style.display = help.classList.contains('hidden')?'block':'none'; break;
@@ -1964,9 +2889,15 @@ addEventListener('keydown', e=>{
       sfx.crash(); say('engine failure', true);
       toast('MOTOR '+(i+1)+' ARIZASI'); break;
     }
+    case 'Digit0': ilsI = (ilsI+1)%ILS_LIST.length; sfx.click();
+      toast('ILS: '+ILS_LIST[ilsI].name); break;
+    case 'Digit9': ndRange = (ndRange+1)%ND_RANGE.length; sfx.click();
+      toast('ND MENZİL '+ND_RANGE[ndRange]+' NM'); break;
     case 'Digit7':
       for(const E of F.engs){ E.fail=false; E.fire=0; }
       sfx.click(); toast('MOTORLAR ONARILDI'); break;
+    case 'KeyN': setTOD(todI+1); sfx.click(); toast('ZAMAN: '+TODS[todI].n); break;
+    case 'KeyV': setVis(visI+1); sfx.click(); toast('GÖRÜŞ: '+VIS[visI].n); break;
     case 'KeyM':
       WIND.set = (WIND.set+1)%WIND_SETS.length; sfx.click();
       toast('RÜZGÂR: '+WIND_SETS[WIND.set].n+' · '+WIND_SETS[WIND.set].dir+'° / '+WIND_SETS[WIND.set].kt+' KT'); break;
@@ -1988,8 +2919,8 @@ addEventListener('keydown', e=>{
       sfx.click(); toast('OTO GAZ '+(AP.at?('AÇIK · '+AP.spd+' KT'):'KAPALI')); break;
     case 'Digit4':
       AP.appr = !AP.appr;
-      if(AP.appr){ if(!AP.on) apEngage(); AP.at = true; AP.spd = 145; }
-      sfx.click(); toast('ILS YAKLAŞMA '+(AP.appr?'KURULDU · RWY 36':'İPTAL')); break;
+      if(AP.appr){ selectBestILS(); if(!AP.on) apEngage(); AP.at = true; AP.spd = 145; }
+      sfx.click(); toast('ILS '+(AP.appr?('KURULDU · '+ILS_LIST[ilsI].name):'İPTAL')); break;
     case 'Digit8': case 'Numpad8': sfx.init(); sfx.setVol(sfx.vol+0.1); volToast(); break;
     case 'Digit2': case 'Numpad2': sfx.init(); sfx.setVol(sfx.vol-0.1); volToast(); break;
     case 'Digit5': case 'Numpad5': sfx.init(); sfx.toggleMute(); volToast(); break;
@@ -2048,8 +2979,8 @@ function setView(){
   cView.querySelector('.v').textContent = VIEWS[view];
 }
 function applyFov(){
-  const vBase = view===0 ? 58 : 52;          // dikey görüş açısı
-  const hMax  = view===0 ? 104 : 100;        // ultra geniş ekranlarda yatay sınır
+  const vBase = view===0 ? 58 : (view===3 ? 62 : 52);   // dikey görüş açısı
+  const hMax  = view===0 ? 104 : (view===3 ? 108 : 100);        // ultra geniş ekranlarda yatay sınır
   let v = vBase;
   const h = 2*RAD(Math.atan(Math.tan(DEG(v/2))*camera.aspect));
   if(h > hMax) v = 2*RAD(Math.atan(Math.tan(DEG(hMax/2))/camera.aspect));
@@ -2072,6 +3003,14 @@ function updateCamera(dt){
     camera.position.lerp(camPos, 1-Math.exp(-6*dt));
     camAim.copy(F.pos).addScaledVector(_fwd, 55); camAim.y += 6.0;
     camera.lookAt(camAim);
+  } else if(view===3){                       // taksi görüşü: burun üstünden aşağı bakış
+    const e = getEuler();
+    _tmp.set(0, 26, -14).applyAxisAngle(_UPV, e.y);
+    camPos.copy(F.pos).add(_tmp);
+    camera.position.lerp(camPos, 1-Math.exp(-9*dt));
+    camAim.copy(F.pos).addScaledVector(_fwd, 70);
+    camAim.y = terrainH(camAim.x, camAim.z) + 4;
+    camera.lookAt(camAim);
   } else {
     orbit += dt*0.14;
     camPos.set(Math.cos(orbit)*170, 48, Math.sin(orbit)*170).add(F.pos);
@@ -2091,6 +3030,7 @@ const cThr=document.getElementById('cThr'), cGear=document.getElementById('cGear
       cAp=document.getElementById('cAp'), cAt=document.getElementById('cAt'),
       cIls=document.getElementById('cIls'), cSpl=document.getElementById('cSpl'),
       cWind=document.getElementById('cWind'), cRa=document.getElementById('cRa'),
+      procEl=document.getElementById('proc'),
       thrFill=document.getElementById('thrFill'),
       warnEl=document.getElementById('warn'), toastEl=document.getElementById('toast'),
       help=document.getElementById('help'), hint=document.getElementById('hint'),
@@ -2120,13 +3060,15 @@ function updateHUD(dt, kt){
   setChip(cFuel, Math.round(F.fuel*100)+'%', F.fuel<0.18?'bad':(F.fuel<0.35?'hot':''));
   setChip(cAp, AP.on ? Math.round(AP.hdg)+'° · '+AP.alt+'ft' : 'KAPALI', AP.on?'on':'');
   setChip(cAt, AP.at ? AP.spd+' kt' : 'KAPALI', AP.at?'on':'');
-  setChip(cSpl, F.rev>0.05 ? 'TERS İTKİ' : Math.round(F.spoiler*100)+'%',
-          F.rev>0.05?'bad':(F.spoiler>0.05?'hot':(F.spArmed?'on':'')));
+  setChip(cSpl, F.park ? 'PARK FRENİ' : (F.rev>0.05 ? 'TERS İTKİ' : Math.round(F.spoiler*100)+'%'),
+          F.park?'bad':(F.rev>0.05?'bad':(F.spoiler>0.05?'hot':(F.spArmed?'on':''))));
   setChip(cWind, WIND_SETS[WIND.set].dir+'° '+WIND_SETS[WIND.set].kt+'kt',
           WIND_SETS[WIND.set].kt>25?'bad':(WIND_SETS[WIND.set].kt>15?'hot':''));
   setChip(cRa, (F.ground||F.agl>2500) ? '—' : Math.round(F.agl)+' ft',
           (!F.ground && F.agl<220) ? 'hot' : '');
+  procUpdate();
   const _ils = ilsData();
+  cIls.querySelector('.k').textContent = 'ILS ' + ILS.name;
   setChip(cIls, !AP.appr ? '—' : (_ils && _ils.live
         ? (Math.round(_ils.d/185.2)/10)+' NM · '+(_ils.gsd>0?'+':'')+_ils.gsd.toFixed(1)+'°'
         : 'ARANIYOR'),
@@ -2151,7 +3093,8 @@ function updateHUD(dt, kt){
 /* =========================================================================
    GÖRSEL GÜNCELLEME
    ========================================================================= */
-let gaugeAcc = 0, gaugeStep = 0, fireT = 0;
+let gaugeAcc = 0, gaugeStep = 0, fireT = 0, ndRange = 3;
+const ND_RANGE = [2,5,10,20,40,80,160];
 function updateVisuals(dt, kt, ftAlt, fpm, hdg, e, turnRate){
   plane.position.copy(F.pos);
   plane.quaternion.copy(F.quat);
@@ -2241,23 +3184,42 @@ function updateVisuals(dt, kt, ftAlt, fpm, hdg, e, turnRate){
   rebuildTerrain(F.pos.x, F.pos.z);
   sock.rotation.y = Math.atan2(-WIND.v.z, WIND.v.x);
   updateSmoke(dt);
+  updatePAPI();
+  if(nightF > 0.25){                       // yaklaşma ışıkları: tavşan dizisi
+    const step = 9 - Math.floor((performance.now()%900)/100);
+    for(const m of APPR_LIGHTS)
+      m.material.color.setHex(m.userData.seq === step ? 0xffffff : 0xbfa96e);
+  }
 
-  // suni ufuk 30 Hz, diğerleri kare kare sırayla → doku yüklemesi dağıtılır
+  // PFD 30 Hz, diğer ekranlar sırayla → doku yüklemesi dağıtılır
+  const ils = ilsData();
   gaugeAcc += dt;
   if(gaugeAcc >= 1/30){
     gaugeAcc -= 1/30;
-    drawAI(G.ai.x, RAD(e.x), -RAD(e.z), ilsData()); G.ai.t.needsUpdate = true;
+    const rho2 = 1.225*Math.exp(-Math.max(F.pos.y,0)/8600);
+    const clmax = CL0 + CLA*STALL_A + FLAP_SET[F.flap]*0.020;
+    const vls = Math.sqrt(2*MASS*GRAV/(rho2*SREF*clmax))*1.94384*1.23;
+    const sos = 340.3*Math.sqrt(Math.max(1-2.2557e-5*F.pos.y, 0.62));
+    drawPFD(pfd.x, {
+      pitch: RAD(e.x), bank: -RAD(e.z), kt, alt: ftAlt, vs: fpm, hdg,
+      ils, agl: F.agl, ground: F.ground, stall: F.stall, mach: F.tas/sos,
+      vls, ap: AP.on, at: AP.at, appr: AP.appr,
+      altTgt: AP.alt, hdgTgt: AP.hdg, spdTgt: AP.spd,
+      fieldAlt: terrainH(F.pos.x,F.pos.z)*3.28084
+    });
+    pfd.t.needsUpdate = true;
   }
-  for(let q=0; q<perf.gaugesPerFrame; q++){
-    gaugeStep = (gaugeStep+1) % 6;
+  {
+    gaugeStep = (gaugeStep+1) % 3;   // ND / EICAS / yedek ufuk ~20 Hz
     switch(gaugeStep){
-      case 0: drawASI(G.asi.x, kt); G.asi.t.needsUpdate=true; break;
-      case 1: drawALT(G.alt.x, ftAlt); G.alt.t.needsUpdate=true; break;
-      case 2: drawVSI(G.vsi.x, fpm); G.vsi.t.needsUpdate=true; break;
-      case 3: drawHI(G.hi.x, hdg); G.hi.t.needsUpdate=true; break;
-      case 4: drawTC(G.tc.x, turnRate, clamp(-F.slip*3.2,-1,1)); G.tc.t.needsUpdate=true; break;
-      case 5: drawEICAS(eicas.x, F.engs, F.fuel, F.oil, F.egt, F.rev);
+      case 0: drawND(nd.x, {
+                hdg, px:F.pos.x, pz:F.pos.z, range: ND_RANGE[ndRange],
+                gs: Math.hypot(F.vel.x,F.vel.z)*1.94384, tas: F.tas*1.94384,
+                windDir: WIND_SETS[WIND.set].dir, windKt: WIND_SETS[WIND.set].kt, ils
+              }); nd.t.needsUpdate=true; break;
+      case 1: drawEICAS(eicas.x, F.engs, F.fuel, F.oil, F.egt, F.rev);
               eicas.t.needsUpdate=true; break;
+      case 2: drawAI(G.ai.x, RAD(e.x), -RAD(e.z), null); G.ai.t.needsUpdate=true; break;
     }
   }
 }
@@ -2268,13 +3230,13 @@ function updateVisuals(dt, kt, ftAlt, fpm, hdg, e, turnRate){
 const BASE_PR = Math.min(window.devicePixelRatio||1, 1.5);
 const perf = {
   level: 2, fps: 60, frames: 0, acc: 0, good: 0,
-  scale: 1, gaugesPerFrame: 2, terrBudget: 2600, shadowEvery: 2, shadowSize: 1024,
+  scale: 1, gaugesPerFrame: 2, terrBudget: 5200, shadowEvery: 2, shadowSize: 1024,
   manual: false
 };
 const QUALITY = [
-  {name:'DÜŞÜK',  scale:0.62, gauges:1, terr:1400, shadowEvery:6, shadowSize:512,  clouds:0.40},
-  {name:'ORTA',   scale:0.82, gauges:1, terr:2000, shadowEvery:3, shadowSize:768,  clouds:0.70},
-  {name:'YÜKSEK', scale:1.00, gauges:2, terr:2600, shadowEvery:2, shadowSize:1024, clouds:1.00}
+  {name:'DÜŞÜK',  scale:0.62, gauges:1, terr:2600, shadowEvery:6, shadowSize:512,  clouds:0.40},
+  {name:'ORTA',   scale:0.82, gauges:1, terr:3800, shadowEvery:3, shadowSize:768,  clouds:0.70},
+  {name:'YÜKSEK', scale:1.00, gauges:2, terr:5200, shadowEvery:2, shadowSize:1024, clouds:1.00}
 ];
 function applyQuality(){
   const q = QUALITY[perf.level];
@@ -2353,7 +3315,8 @@ function frame(now){
   sfx.update(F.n1, V, F.stall, F.rev);
   callouts(dt, kt, F.agl, fpm);
 
-  if(!F.eng && F.starting<=0 && !F.crashed && F.ground && V<3) msg('MOTORLAR KAPALI','Çalıştırmak için ENTER');
+  if(landMsgT > 0){ landMsgT -= dt; if(landMsgT <= 0) msg(null); }
+  else if(!F.eng && F.starting<=0 && !F.crashed && F.ground && V<3) msg('MOTORLAR KAPALI','Çalıştırmak için ENTER');
   else if(!F.crashed && (F.eng||F.starting>0)) msg(null);
 
   if(frameNo % perf.shadowEvery === 0) renderer.shadowMap.needsUpdate = true;
@@ -2371,6 +3334,7 @@ addEventListener('resize', ()=>{
    BAŞLAT
    ========================================================================= */
 applyQuality();
+setTOD(0); setVis(0);
 resetPlane();
 setView();
 rebuildTerrain(F.pos.x, F.pos.z, true);
